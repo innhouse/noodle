@@ -75,17 +75,37 @@ function readStructuredJson(response) {
   }
 }
 
+// A hotel breakfast is several plates and several trips. More than this and the
+// token cost climbs without the estimate getting better.
+const MAX_IMAGES = 6;
+
 export const analyzeMeal = onCall(RUNTIME, async (request) => {
   const uid = requireUser(request);
-  const { imageBase64, mimeType = 'image/jpeg', mealType = 'meal', hint = '' } = request.data ?? {};
+  const {
+    images,
+    imageBase64,
+    mimeType = 'image/jpeg',
+    mealType = 'meal',
+    hint = '',
+  } = request.data ?? {};
 
-  if (typeof imageBase64 !== 'string' || imageBase64.length < 100) {
+  // `imageBase64` is the original single-photo shape, still accepted so an older
+  // installed build keeps working after this deploys.
+  const photos = Array.isArray(images) && images.length > 0
+    ? images
+    : [{ base64: imageBase64, mimeType }];
+
+  if (photos.some((photo) => typeof photo?.base64 !== 'string' || photo.base64.length < 100)) {
     throw new HttpsError('invalid-argument', 'No photo was included in the request.');
+  }
+  if (photos.length > MAX_IMAGES) {
+    throw new HttpsError('invalid-argument', `Send at most ${MAX_IMAGES} photos of one meal.`);
   }
   // Callable payloads cap at 10 MB; the app already downscales, so anything this
   // large is a bug worth failing loudly on rather than paying to send.
-  if (imageBase64.length > 7_000_000) {
-    throw new HttpsError('invalid-argument', 'That photo is too large. Retake it and try again.');
+  const totalBytes = photos.reduce((sum, photo) => sum + photo.base64.length, 0);
+  if (totalBytes > 7_000_000) {
+    throw new HttpsError('invalid-argument', 'Those photos are too large. Try fewer at once.');
   }
 
   const rawKey = ANTHROPIC_API_KEY.value();
@@ -99,8 +119,14 @@ export const analyzeMeal = onCall(RUNTIME, async (request) => {
 
   const userText =
     `This is my ${mealType}.` +
+    (photos.length > 1
+      ? ` There are ${photos.length} photos of it — they may show different dishes, ` +
+        'or the same dish from another angle or at a different stage of being eaten. ' +
+        'Count each distinct food once across all of them, and say in the notes if you ' +
+        'were unsure whether two photos showed the same thing.'
+      : '') +
     (hint ? ` Extra context from me: ${hint}` : '') +
-    '\n\nIdentify everything in the photo and estimate the weight of each component.';
+    '\n\nIdentify everything and estimate the weight of each component.';
 
   let response;
   try {
@@ -118,7 +144,14 @@ export const analyzeMeal = onCall(RUNTIME, async (request) => {
         {
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+            ...photos.map((photo) => ({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: photo.mimeType ?? 'image/jpeg',
+                data: photo.base64,
+              },
+            })),
             { type: 'text', text: userText },
           ],
         },

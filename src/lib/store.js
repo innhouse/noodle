@@ -96,9 +96,10 @@ export async function uploadMealPhoto(uid, mealId, blob) {
 
 // --- Cloud Functions -------------------------------------------------------
 
-export async function analyzeMealPhoto({ imageBase64, mimeType, mealType, hint }) {
+/** `images` is an array of { base64, mimeType } — one meal, one or more photos. */
+export async function analyzeMealPhoto({ images, mealType, hint }) {
   const call = httpsCallable(functions, 'analyzeMeal', { timeout: 120_000 });
-  const result = await call({ imageBase64, mimeType, mealType, hint });
+  const result = await call({ images, mealType, hint });
   return result.data;
 }
 

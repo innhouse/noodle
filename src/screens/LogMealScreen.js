@@ -27,12 +27,17 @@ import { Button, Card, Dropdown, Empty, Field, Pill, Segmented } from '../ui';
  * estimate is the weakest number in the chain, so everything the user can fix is one
  * tap away and the totals update live as they change it.
  */
+// Matches MAX_IMAGES in the Cloud Function. More photos cost tokens without making
+// the estimate better.
+const MAX_PHOTOS = 6;
+
 export default function LogMealScreen({ onDone, onCancel }) {
   const { user } = useAuth();
   const [phase, setPhase] = useState('choose');
   const [mealType, setMealType] = useState(guessMealType());
   const [hint, setHint] = useState('');
-  const [photo, setPhoto] = useState(null);
+  // One meal can be several photos — a hotel breakfast is rarely a single plate.
+  const [photos, setPhotos] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState('');
 
@@ -74,6 +79,10 @@ export default function LogMealScreen({ onDone, onCancel }) {
     return resolveMeal(analysis.items, itemStates, analysis.questions, answers);
   }, [analysis, itemStates, answers]);
 
+  /**
+   * Add photos to the meal without analysing yet, so several plates can be
+   * collected before a single call covers all of them at once.
+   */
   async function pick(fromCamera) {
     setError('');
     try {
@@ -90,16 +99,29 @@ export default function LogMealScreen({ onDone, onCancel }) {
         return;
       }
 
+      const remaining = MAX_PHOTOS - photos.length;
       const options = { quality: 0.7, base64: true, mediaTypes: 'images' };
       const result = fromCamera
         ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
+        : await ImagePicker.launchImageLibraryAsync({
+            ...options,
+            allowsMultipleSelection: true,
+            selectionLimit: remaining,
+          });
 
       if (result.canceled) return;
-      await analyze(result.assets[0]);
+
+      const prepared = await Promise.all(
+        result.assets.slice(0, remaining).map((asset) => prepareImage(asset))
+      );
+      setPhotos((previous) => [...previous, ...prepared]);
     } catch (caught) {
       setError(caught.message ?? 'Could not open the camera.');
     }
+  }
+
+  function removePhoto(index) {
+    setPhotos((previous) => previous.filter((_, n) => n !== index));
   }
 
   /**
@@ -111,14 +133,13 @@ export default function LogMealScreen({ onDone, onCancel }) {
    * that sentence is both more accurate and easier than doing the arithmetic.
    */
   async function reanalyze() {
-    if (!photo?.base64 || !correction.trim()) return;
+    if (photos.length === 0 || !correction.trim()) return;
     setReanalyzing(true);
     setError('');
     try {
       const combined = [hint.trim(), correction.trim()].filter(Boolean).join('. ');
       const data = await analyzeMealPhoto({
-        imageBase64: photo.base64,
-        mimeType: photo.mimeType,
+        images: photos.map(({ base64, mimeType }) => ({ base64, mimeType })),
         mealType,
         hint: combined,
       });
@@ -152,16 +173,13 @@ export default function LogMealScreen({ onDone, onCancel }) {
     );
   }
 
-  async function analyze(asset) {
+  async function analyze() {
+    if (photos.length === 0) return;
     setPhase('analyzing');
     setError('');
     try {
-      const image = await prepareImage(asset);
-      setPhoto(image);
-
       const data = await analyzeMealPhoto({
-        imageBase64: image.base64,
-        mimeType: image.mimeType,
+        images: photos.map(({ base64, mimeType }) => ({ base64, mimeType })),
         mealType,
         hint: hint.trim(),
       });
@@ -201,7 +219,7 @@ export default function LogMealScreen({ onDone, onCancel }) {
     );
     setAnswers(meal.answers ?? {});
     setReusedPhotoUrl(meal.photoUrl ?? null);
-    setPhoto(null);
+    setPhotos([]);
     setPhase('confirm');
   }
 
@@ -244,8 +262,10 @@ export default function LogMealScreen({ onDone, onCancel }) {
       // spinning forever on a meal that had already been logged successfully.
       onDone();
 
-      if (photo?.uri) {
-        uploadPhotoInBackground(user.uid, mealId, photo.uri);
+      // Only the first photo is kept as the meal's thumbnail; the rest did their
+      // job at analysis time and storing them all would cost space for nothing.
+      if (photos[0]?.uri) {
+        uploadPhotoInBackground(user.uid, mealId, photos[0].uri);
       }
     } catch (caught) {
       Alert.alert('Could not save', caught.message ?? 'Something went wrong.');
@@ -262,9 +282,13 @@ export default function LogMealScreen({ onDone, onCancel }) {
   if (phase === 'analyzing') {
     return (
       <View style={styles.centered}>
-        {photo?.uri ? <Image source={{ uri: photo.uri }} style={styles.analyzingPhoto} /> : null}
+        {photos[0]?.uri ? (
+          <Image source={{ uri: photos[0].uri }} style={styles.analyzingPhoto} />
+        ) : null}
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.analyzingText}>Reading your plate…</Text>
+        <Text style={styles.analyzingText}>
+          {photos.length > 1 ? `Reading all ${photos.length} photos…` : 'Reading your plate…'}
+        </Text>
         <Text style={styles.analyzingHint}>
           Identifying each item and looking up its nutrition. Takes a few seconds.
         </Text>
@@ -302,7 +326,7 @@ export default function LogMealScreen({ onDone, onCancel }) {
 
         {analysis.notes ? <Text style={styles.notes}>{analysis.notes}</Text> : null}
 
-        {photo?.base64 ? (
+        {photos.length > 0 ? (
           <Card>
             <Field
               label="Got something wrong?"
@@ -430,11 +454,48 @@ export default function LogMealScreen({ onDone, onCancel }) {
         />
       </Card>
 
+      {photos.length > 0 ? (
+        <Card>
+          <Text style={styles.fieldLabel}>
+            {photos.length} photo{photos.length === 1 ? '' : 's'} of this meal
+          </Text>
+          <View style={styles.thumbRow}>
+            {photos.map((item, index) => (
+              <Pressable key={item.uri} onPress={() => removePhoto(index)}>
+                <Image source={{ uri: item.uri }} style={styles.thumb} />
+                <View style={styles.thumbRemove}>
+                  <Text style={styles.thumbRemoveText}>×</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.fieldHint}>
+            Tap a photo to remove it. Several plates from one sitting belong together —
+            analysing them at once stops the same dish being counted twice.
+          </Text>
+        </Card>
+      ) : null}
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Button title="Take a photo" onPress={() => pick(true)} />
-      <View style={{ height: spacing.sm }} />
-      <Button title="Choose from library" variant="secondary" onPress={() => pick(false)} />
+      {photos.length > 0 ? (
+        <>
+          <Button title={`Analyse ${photos.length === 1 ? 'this photo' : 'these photos'}`} onPress={analyze} />
+          <View style={{ height: spacing.sm }} />
+        </>
+      ) : null}
+
+      {photos.length < MAX_PHOTOS ? (
+        <>
+          <Button
+            title={photos.length ? 'Add another photo' : 'Take a photo'}
+            variant={photos.length ? 'secondary' : 'primary'}
+            onPress={() => pick(true)}
+          />
+          <View style={{ height: spacing.sm }} />
+          <Button title="Choose from library" variant="secondary" onPress={() => pick(false)} />
+        </>
+      ) : null}
 
       {repeatable.length > 0 ? (
         <>
@@ -615,6 +676,21 @@ const styles = StyleSheet.create({
   confidence: { fontSize: fonts.tiny, fontWeight: '600', textTransform: 'capitalize' },
   itemSource: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.xs, marginBottom: spacing.md },
   itemMacros: { fontSize: fonts.small, color: colors.inkSoft },
+
+  thumbRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  thumb: { width: 72, height: 72, borderRadius: radius - 6 },
+  thumbRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbRemoveText: { color: '#FFFFFF', fontSize: fonts.small, fontWeight: '700', lineHeight: 18 },
 
   repeatCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   repeatPhoto: { width: 48, height: 48, borderRadius: radius - 6 },
