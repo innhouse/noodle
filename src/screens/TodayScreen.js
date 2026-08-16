@@ -12,8 +12,8 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { addDays, dayKey, formatDayLabel, formatTime, isToday } from '../lib/dates';
-import { activityBonus, sumMeals } from '../lib/nutrition';
-import { activeEnergyToday, healthSupported, requestHealthAccess } from '../lib/health';
+import { activityBonus, perMealProtein, sumMeals } from '../lib/nutrition';
+import { activeEnergyForDay, healthSupported, requestHealthAccess } from '../lib/health';
 import { deleteMeal, watchMeals } from '../lib/store';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Card, Empty, MacroBar } from '../ui';
@@ -30,17 +30,14 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
   }, [user, day]);
 
   useEffect(() => {
-    // Only today's burn is meaningful; scrolling back a week should not imply
-    // yesterday's activity is being counted.
-    if (!healthSupported || !isToday(day)) {
-      setActiveEnergy(null);
-      return undefined;
-    }
+    if (!healthSupported) return undefined;
 
     let cancelled = false;
     const refresh = async () => {
       if (!(await requestHealthAccess())) return;
-      const value = await activeEnergyToday();
+      // Read the day being viewed, not today: scrolling back should show the
+      // activity that actually accompanied those meals.
+      const value = await activeEnergyForDay(day);
       if (!cancelled) setActiveEnergy(value);
     };
 
@@ -115,7 +112,7 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
 
           {activeEnergy !== null && activeEnergy > 0 ? (
             <Text style={styles.activeEnergy}>
-              {Math.round(activeEnergy)} kcal active today
+              {Math.round(activeEnergy)} kcal active{isToday(day) ? ' today' : ''}
               {bonus === 0 ? ' · not added to your budget' : ''}
             </Text>
           ) : null}
@@ -180,6 +177,16 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
                     {Math.round(meal.totals.protein)}p · {Math.round(meal.totals.carbs)}c ·{' '}
                     {Math.round(meal.totals.fat)}f
                   </Text>
+                  {proteinVerdict(meal, targets) ? (
+                    <Text
+                      style={[
+                        styles.proteinVerdict,
+                        { color: proteinVerdict(meal, targets).colour },
+                      ]}
+                    >
+                      {proteinVerdict(meal, targets).text}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </Card>
@@ -192,6 +199,28 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
       ) : null}
     </ScrollView>
   );
+}
+
+/**
+ * Whether a meal reached its own protein target.
+ *
+ * Shown per meal rather than only as a daily total because muscle protein synthesis
+ * is triggered per meal — a day that hits 130 g across three even meals does more
+ * than the same 130 g concentrated at dinner, and only a per-meal view shows the
+ * difference.
+ */
+function proteinVerdict(meal, targets) {
+  const target = perMealProtein(targets, meal.mealType);
+  if (!target) return null;
+
+  const protein = meal.totals?.protein ?? 0;
+  if (protein >= target) {
+    return { text: `✓ ${Math.round(protein)}g protein — target met`, colour: colors.primary };
+  }
+  return {
+    text: `${Math.round(target - protein)}g short of the ${target}g target`,
+    colour: colors.accent,
+  };
 }
 
 function capitalise(text) {
@@ -242,6 +271,7 @@ const styles = StyleSheet.create({
   mealCalories: { fontSize: fonts.body, fontWeight: '700', color: colors.primary, marginLeft: spacing.sm },
   mealMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
   mealMacros: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.xs },
+  proteinVerdict: { fontSize: fonts.tiny, fontWeight: '700', marginTop: 3 },
 
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'center', marginTop: spacing.md },
 });

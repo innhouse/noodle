@@ -15,6 +15,6 @@ export async function latestWeightKg() {
   return null;
 }
 
-export async function activeEnergyToday() {
+export async function activeEnergyForDay() {
   return null;
 }

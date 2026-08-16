@@ -50,14 +50,22 @@ export async function latestWeightKg() {
   }
 }
 
-/** Active energy burned since midnight, in kcal. Excludes resting metabolism. */
-export async function activeEnergyToday() {
+/**
+ * Active energy burned on a given local day, in kcal. Excludes resting metabolism.
+ *
+ * Takes a day rather than assuming today so that scrolling back through the log
+ * shows the activity that actually accompanied those meals.
+ */
+export async function activeEnergyForDay(day) {
   try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const [year, month, date] = day.split('-').map(Number);
+    const start = new Date(year, month - 1, date, 0, 0, 0, 0);
+    const end = new Date(year, month - 1, date, 23, 59, 59, 999);
+    // For today, stop at now — a day that is still running has no evening yet.
+    const until = end > new Date() ? new Date() : end;
 
     const result = await queryStatisticsForQuantity(ACTIVE_ENERGY, ['cumulativeSum'], {
-      filter: { date: { startDate: startOfDay, endDate: new Date() } },
+      filter: { date: { startDate: start, endDate: until } },
       unit: 'kcal',
     });
     return result?.sumQuantity?.quantity ?? 0;
