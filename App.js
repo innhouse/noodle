@@ -34,6 +34,8 @@ function Shell() {
   const [tab, setTab] = useState('today');
   // Full-screen flows that sit above the tabs rather than inside them.
   const [overlay, setOverlay] = useState(null);
+  // The meal being corrected, when the log screen is opened to edit rather than add.
+  const [editing, setEditing] = useState(null);
 
   if (!firebaseReady) {
     return (
@@ -57,7 +59,11 @@ function Shell() {
   if (!user) return <SignInScreen />;
 
   if (overlay === 'log') {
-    return <LogMealScreen onDone={() => setOverlay(null)} onCancel={() => setOverlay(null)} />;
+    const close = () => {
+      setOverlay(null);
+      setEditing(null);
+    };
+    return <LogMealScreen editMeal={editing} onDone={close} onCancel={close} />;
   }
   if (overlay === 'coach') {
     return <CoachScreen onClose={() => setOverlay(null)} />;
@@ -67,7 +73,17 @@ function Shell() {
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
         {tab === 'today' ? (
-          <TodayScreen onLogMeal={() => setOverlay('log')} onOpenCoach={() => setOverlay('coach')} />
+          <TodayScreen
+            onLogMeal={() => {
+              setEditing(null);
+              setOverlay('log');
+            }}
+            onEditMeal={(meal) => {
+              setEditing(meal);
+              setOverlay('log');
+            }}
+            onOpenCoach={() => setOverlay('coach')}
+          />
         ) : null}
         {tab === 'history' ? <HistoryScreen /> : null}
         {tab === 'weight' ? <WeightScreen /> : null}

@@ -8,7 +8,7 @@ import { deleteMeal, watchMeals } from '../lib/store';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Card, Empty, MacroBar } from '../ui';
 
-export default function TodayScreen({ onLogMeal, onOpenCoach }) {
+export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
   const { user, targets } = useAuth();
   const [day, setDay] = useState(dayKey());
   const [meals, setMeals] = useState([]);
@@ -100,7 +100,11 @@ export default function TodayScreen({ onLogMeal, onOpenCoach }) {
         />
       ) : (
         meals.map((meal) => (
-          <Pressable key={meal.id} onLongPress={() => confirmDelete(meal)}>
+          <Pressable
+            key={meal.id}
+            onPress={() => onEditMeal(meal)}
+            onLongPress={() => confirmDelete(meal)}
+          >
             <Card>
               <View style={styles.mealRow}>
                 {meal.photoUrl ? (
@@ -131,7 +135,9 @@ export default function TodayScreen({ onLogMeal, onOpenCoach }) {
         ))
       )}
 
-      {meals.length > 0 ? <Text style={styles.hint}>Long-press a meal to delete it.</Text> : null}
+      {meals.length > 0 ? (
+        <Text style={styles.hint}>Tap a meal to correct it, or long-press to delete.</Text>
+      ) : null}
     </ScrollView>
   );
 }

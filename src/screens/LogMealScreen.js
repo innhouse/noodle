@@ -15,7 +15,13 @@ import { useAuth } from '../context/AuthContext';
 import { dayKey, guessMealType, MEAL_TYPES } from '../lib/dates';
 import { prepareImage, uriToBlob } from '../lib/image';
 import { PORTION_CHOICES, resolveMeal } from '../lib/nutrition';
-import { analyzeMealPhoto, saveMeal, uploadMealPhoto, watchRecentMeals } from '../lib/store';
+import {
+  analyzeMealPhoto,
+  deleteMeal,
+  saveMeal,
+  uploadMealPhoto,
+  watchRecentMeals,
+} from '../lib/store';
 import { colors, confidenceColor, fonts, radius, spacing } from '../theme';
 import { Button, Card, Dropdown, Empty, Field, Pill, Segmented } from '../ui';
 
@@ -31,9 +37,12 @@ import { Button, Card, Dropdown, Empty, Field, Pill, Segmented } from '../ui';
 // the estimate better.
 const MAX_PHOTOS = 6;
 
-export default function LogMealScreen({ onDone, onCancel }) {
+export default function LogMealScreen({ onDone, onCancel, editMeal }) {
   const { user } = useAuth();
-  const [phase, setPhase] = useState('choose');
+  const [phase, setPhase] = useState(editMeal ? 'confirm' : 'choose');
+  // Set when correcting an already-logged meal, so saving updates it in place
+  // rather than adding a second copy of the same food to the day.
+  const [editingId, setEditingId] = useState(editMeal?.id ?? null);
   const [mealType, setMealType] = useState(guessMealType());
   const [hint, setHint] = useState('');
   // One meal can be several photos — a hotel breakfast is rarely a single plate.
@@ -205,7 +214,7 @@ export default function LogMealScreen({ onDone, onCancel }) {
    * reproduces the same totals exactly — and every dropdown still works, so a
    * slightly different portion this time is one tap away.
    */
-  function relog(meal) {
+  function loadSavedMeal(meal) {
     setAnalysis({
       isFood: true,
       mealName: meal.name,
@@ -219,8 +228,33 @@ export default function LogMealScreen({ onDone, onCancel }) {
     );
     setAnswers(meal.answers ?? {});
     setReusedPhotoUrl(meal.photoUrl ?? null);
+    setMealType(meal.mealType ?? guessMealType());
     setPhotos([]);
     setPhase('confirm');
+  }
+
+  function relog(meal) {
+    // A repeat is a new meal today, not an edit of the old one.
+    setEditingId(null);
+    loadSavedMeal(meal);
+  }
+
+  useEffect(() => {
+    if (editMeal) loadSavedMeal(editMeal);
+  }, [editMeal]);
+
+  async function removeMeal() {
+    Alert.alert('Delete this meal?', analysis?.mealName ?? '', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteMeal(user.uid, editingId);
+          onDone();
+        },
+      },
+    ]);
   }
 
   async function save() {
@@ -228,10 +262,13 @@ export default function LogMealScreen({ onDone, onCancel }) {
     setSaving(true);
     try {
       const mealId = await saveMeal(user.uid, {
-        dayKey: dayKey(),
+        // Editing keeps the meal's identity and its place in the day; only a new
+        // log gets today's date and the current time.
+        ...(editingId
+          ? { id: editingId, dayKey: editMeal.dayKey, loggedAt: editMeal.loggedAt }
+          : { dayKey: dayKey(), loggedAt: new Date().toISOString() }),
         mealType,
         name: analysis.mealName,
-        loggedAt: new Date().toISOString(),
         items: resolved.items.map((item) => ({
           id: item.id,
           label: item.label,
@@ -425,8 +462,19 @@ export default function LogMealScreen({ onDone, onCancel }) {
           onChange={setMealType}
         />
 
-        <Button title="Log this meal" onPress={save} loading={saving} />
-        <Button title="Start over" variant="ghost" onPress={() => setPhase('choose')} />
+        <Button
+          title={editingId ? 'Save changes' : 'Log this meal'}
+          onPress={save}
+          loading={saving}
+        />
+        {editingId ? (
+          <>
+            <Button title="Delete this meal" variant="danger" onPress={removeMeal} />
+            <Button title="Cancel" variant="ghost" onPress={onCancel} />
+          </>
+        ) : (
+          <Button title="Start over" variant="ghost" onPress={() => setPhase('choose')} />
+        )}
       </ScrollView>
     );
   }
