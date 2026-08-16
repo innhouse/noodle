@@ -61,18 +61,75 @@ function readNutrients(food) {
   return out;
 }
 
+// Below this share of the query's words appearing in the food's description, the
+// match is treated as no match at all. A confidently wrong lookup is worse than
+// none: it is labelled "USDA" in the app, which reads as authoritative, whereas an
+// unmatched item falls back to the model's estimate and is labelled as one.
+const MIN_WORD_MATCH = 0.5;
+
+// Words that materially change a food's nutrition. When one appears in a USDA
+// description but not in what we asked for, it is describing a different food than
+// the one on the plate — "raw" when we cooked it, "non-dairy" when we did not.
+const MODIFIERS = [
+  'raw',
+  'dried',
+  'dehydrated',
+  'frozen',
+  'canned',
+  'decaffeinated',
+  'non-dairy',
+  'nondairy',
+  'nonfat',
+  'fat free',
+  'fat-free',
+  'low fat',
+  'lowfat',
+  'reduced fat',
+  'skim',
+  'light',
+  'unsweetened',
+  'sweetened',
+  'diet',
+  'sugar free',
+  'sugar-free',
+  'baby food',
+  'infant',
+  'school lunch',
+  'restaurant',
+  'fast food',
+];
+
 function scoreCandidate(food, query) {
   const rank = DATA_TYPE_RANK[food.dataType];
   if (rank === undefined) return null;
 
   const description = (food.description || '').toLowerCase();
   const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-  const matched = words.filter((w) => description.includes(w)).length;
+  if (words.length === 0) return null;
 
-  // Data type dominates, word overlap breaks ties, and shorter descriptions win at
-  // equal overlap because USDA's generic entries are terser than its oddities
-  // ("Chicken, broilers, thigh, meat only, roasted" beats a 12-clause variant).
-  return rank * 1000 - matched * 10 + Math.min(description.length, 200) / 100;
+  const matched = words.filter((w) => description.includes(w)).length;
+  const ratio = matched / words.length;
+  if (ratio < MIN_WORD_MATCH) return null;
+
+  // Penalise qualifiers the query never asked for. Word overlap alone cannot tell
+  // "latte with whole milk" from "latte, decaffeinated, with non-dairy milk" —
+  // "milk" matches both — yet the second is a third of the calories. USDA's
+  // descriptions are dense with these modifiers and picking the wrong one is the
+  // single biggest source of a confidently wrong number.
+  const unrequested = MODIFIERS.filter(
+    (modifier) => description.includes(modifier) && !query.toLowerCase().includes(modifier)
+  ).length;
+
+  // Textual relevance dominates; data type only breaks ties.
+  //
+  // This used to be the other way around, with data type weighted 1000 against word
+  // overlap's 50 — which meant a Foundation entry always beat a Survey one however
+  // badly the words matched. Prepared foods live in the Survey (FNDDS) tier, so a
+  // latte matched "Coffee, brewed" from the Foundation tier and came back at roughly
+  // zero calories. Generic ingredients should not outrank the actual dish.
+  return (
+    -ratio * 1000 + unrequested * 150 + rank * 10 + Math.min(description.length, 200) / 100
+  );
 }
 
 async function searchUsda(query, apiKey) {
