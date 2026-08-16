@@ -6,22 +6,43 @@ import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Field } from '../ui';
 
 export default function SignInScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submit() {
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       if (mode === 'signin') {
         await signIn(email.trim(), password);
       } else {
         await signUp(email.trim(), password);
       }
+    } catch (caught) {
+      setError(friendlyError(caught.code) ?? caught.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function forgot() {
+    if (!email.trim()) {
+      setError('Type your email address first, then tap this again.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await resetPassword(email.trim());
+      // Deliberately not distinguishing "sent" from "no such account" — saying
+      // which emails are registered would let anyone probe for valid accounts.
+      setNotice(`If an account exists for ${email.trim()}, a reset link is on its way.`);
     } catch (caught) {
       setError(friendlyError(caught.code) ?? caught.message);
     } finally {
@@ -58,12 +79,16 @@ export default function SignInScreen() {
             placeholder="••••••••"
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
           <Button
             title={mode === 'signin' ? 'Sign in' : 'Create account'}
             onPress={submit}
             loading={busy}
             disabled={!email.trim() || password.length < 6}
           />
+          {mode === 'signin' ? (
+            <Button title="Forgot your password?" variant="ghost" onPress={forgot} />
+          ) : null}
         </Card>
 
         <Button
@@ -72,6 +97,7 @@ export default function SignInScreen() {
           onPress={() => {
             setMode(mode === 'signin' ? 'signup' : 'signin');
             setError('');
+            setNotice('');
           }}
         />
       </ScrollView>
@@ -101,4 +127,5 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   error: { fontSize: fonts.small, color: colors.danger, marginBottom: spacing.md },
+  notice: { fontSize: fonts.small, color: colors.primary, marginBottom: spacing.md, lineHeight: 20 },
 });

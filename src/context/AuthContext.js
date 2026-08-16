@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
@@ -47,6 +48,7 @@ export function AuthProvider({ children }) {
       needsProfile: Boolean(user) && !profile?.weightKg,
       signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
       signUp: (email, password) => createUserWithEmailAndPassword(auth, email, password),
+      resetPassword: (email) => sendPasswordResetEmail(auth, email),
       signOut: () => signOut(auth),
       updateProfile: (patch) =>
         user ? saveProfile(user.uid, patch) : Promise.resolve(),
