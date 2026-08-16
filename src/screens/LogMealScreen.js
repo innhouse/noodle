@@ -451,6 +451,15 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
                 {Math.round(item.resolvedGrams)} g · {Math.round(item.macros.protein)} g protein ·{' '}
                 {Math.round(item.macros.carbs)} g carbs · {Math.round(item.macros.fat)} g fat
               </Text>
+
+              {outsideEstimate(item) ? (
+                <Text style={styles.itemWarning}>
+                  {Math.round(item.resolvedGrams)} g is well outside the {item.gramsLow}–
+                  {item.gramsHigh} g Claude estimated. The two portion controls multiply each
+                  other, so check they aren't stacking — if you mean "twice as much", change one
+                  of them, not both.
+                </Text>
+              ) : null}
             </Card>
           );
         })}
@@ -615,6 +624,20 @@ function MacroChip({ label, value, color }) {
   );
 }
 
+/**
+ * True when the eaten weight has drifted far past what the photo supported.
+ *
+ * The portion controls compose — grams × question multipliers × how-much-you-ate —
+ * which is correct but easy to double-apply. Claude's own gramsHigh is the honest
+ * ceiling for what the photo showed, so 50% beyond it means the number came from
+ * the controls rather than the food, and is worth a second look before it lands in
+ * the day's total.
+ */
+function outsideEstimate(item) {
+  if (!item.gramsHigh || !item.gramsLow) return false;
+  return item.resolvedGrams > item.gramsHigh * 1.5 || item.resolvedGrams < item.gramsLow * 0.5;
+}
+
 /** Describe an answer's nutritional consequence so the choice is informed. */
 function describeOption(option) {
   const parts = [];
@@ -724,6 +747,15 @@ const styles = StyleSheet.create({
   confidence: { fontSize: fonts.tiny, fontWeight: '600', textTransform: 'capitalize' },
   itemSource: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.xs, marginBottom: spacing.md },
   itemMacros: { fontSize: fonts.small, color: colors.inkSoft },
+  itemWarning: {
+    fontSize: fonts.small,
+    color: colors.danger,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+    backgroundColor: colors.dangerSoft,
+    padding: spacing.sm,
+    borderRadius: radius - 6,
+  },
 
   thumbRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   thumb: { width: 72, height: 72, borderRadius: radius - 6 },
