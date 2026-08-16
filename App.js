@@ -16,6 +16,7 @@ import { firebaseReady } from './src/lib/firebase';
 import CoachScreen from './src/screens/CoachScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import LogMealScreen from './src/screens/LogMealScreen';
+import ReviewScreen from './src/screens/ReviewScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import TodayScreen from './src/screens/TodayScreen';
@@ -24,6 +25,7 @@ import { colors, fonts, spacing } from './src/theme';
 
 const TABS = [
   { key: 'today', label: 'Today', icon: '🍽' },
+  { key: 'review', label: 'Review', icon: '🔍' },
   { key: 'history', label: 'History', icon: '📈' },
   { key: 'weight', label: 'Weight', icon: '⚖️' },
   { key: 'settings', label: 'Settings', icon: '⚙️' },
@@ -85,6 +87,7 @@ function Shell() {
             onOpenCoach={() => setOverlay('coach')}
           />
         ) : null}
+        {tab === 'review' ? <ReviewScreen /> : null}
         {tab === 'history' ? <HistoryScreen /> : null}
         {tab === 'weight' ? <WeightScreen /> : null}
         {tab === 'settings' ? <SettingsScreen /> : null}

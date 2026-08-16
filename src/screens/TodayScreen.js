@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  AppState,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { addDays, dayKey, formatDayLabel, formatTime, isToday } from '../lib/dates';
@@ -25,11 +34,30 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
     // yesterday's activity is being counted.
     if (!healthSupported || !isToday(day)) {
       setActiveEnergy(null);
-      return;
+      return undefined;
     }
-    (async () => {
-      if (await requestHealthAccess()) setActiveEnergy(await activeEnergyToday());
-    })();
+
+    let cancelled = false;
+    const refresh = async () => {
+      if (!(await requestHealthAccess())) return;
+      const value = await activeEnergyToday();
+      if (!cancelled) setActiveEnergy(value);
+    };
+
+    refresh();
+
+    // Re-read whenever the app comes back to the foreground. Health keeps
+    // accumulating while Noodle is closed, and a figure captured once at mount goes
+    // stale within minutes of walking anywhere — which reads as Noodle disagreeing
+    // with the Health app rather than simply not having looked recently.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
   }, [day]);
 
   const totals = sumMeals(meals);

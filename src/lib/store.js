@@ -123,6 +123,12 @@ export async function analyzeMealPhoto({ images, mealType, hint }) {
   return result.data;
 }
 
+export async function reviewMeals({ meals, targets, days }) {
+  const call = httpsCallable(functions, 'reviewMeals', { timeout: 120_000 });
+  const result = await call({ meals, targets, days });
+  return result.data.text;
+}
+
 export async function askCoach({ totals, targets, meals, question }) {
   const call = httpsCallable(functions, 'coachMeal', { timeout: 60_000 });
   const result = await call({

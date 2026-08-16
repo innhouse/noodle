@@ -184,6 +184,41 @@ export function computeTargets(profile) {
 }
 
 /**
+ * How much nutrition a meal delivered for what it cost in calories.
+ *
+ * Deliberately arithmetic rather than a judgement: it rewards protein and fibre per
+ * calorie and penalises added sugar, because those are the levers that matter when
+ * losing weight while holding onto muscle. It says nothing about whether a food is
+ * "good" — a steak and an apple score differently and both have their place. What it
+ * catches is the meal that cost 600 calories and returned almost nothing, which is
+ * the pattern worth seeing repeated across a week.
+ *
+ * Returns 0-100, or null when the meal lacks the data to judge.
+ */
+export function mealQuality(totals) {
+  if (!totals?.calories || totals.calories < 20) return null;
+
+  const per100kcal = (value) => ((value ?? 0) / totals.calories) * 100;
+
+  // Reference points, per 100 kcal: 10 g protein is a lean, protein-forward meal;
+  // 2 g fibre is a genuinely fibrous one; 8 g sugar is dessert territory.
+  const protein = Math.min(per100kcal(totals.protein) / 10, 1);
+  const fibre = Math.min(per100kcal(totals.fiber) / 2, 1);
+  const sugar = Math.min(per100kcal(totals.sugar) / 8, 1);
+
+  const score = protein * 55 + fibre * 30 - sugar * 25 + 15;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+export function qualityLabel(score) {
+  if (score === null) return { text: '—', tone: 'neutral' };
+  if (score >= 70) return { text: 'Earns its calories', tone: 'good' };
+  if (score >= 45) return { text: 'Reasonable', tone: 'neutral' };
+  if (score >= 25) return { text: 'Light on nutrition', tone: 'warn' };
+  return { text: 'Mostly empty calories', tone: 'bad' };
+}
+
+/**
  * Protein target for a single meal.
  *
  * Daily protein alone is a misleading number. Muscle protein synthesis is triggered

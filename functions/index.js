@@ -276,6 +276,87 @@ If they have already eaten well past the budget, say so plainly once and move on
 the rest of the day better. Do not moralise, do not lecture about discipline, and do not pad the
 answer with caveats about consulting a professional.`;
 
+const REVIEW_SYSTEM = `You review a week or so of someone's logged meals and tell them what to change.
+They are losing weight while trying to keep protein high enough to hold onto muscle.
+
+Write four short sections with these exact headings and nothing else:
+
+WHAT'S WORKING
+One or two things they are genuinely doing well, named specifically from their log.
+
+WHAT'S COSTING YOU
+The two or three foods or habits taking the most calories for the least nutrition. Name the actual
+items from their log and the rough calories involved. Be concrete about the cost — "the afternoon
+lattes are about 1,200 calories a week" lands; "watch your snacking" does not.
+
+MORE OF THIS
+Three specific foods worth eating more of, chosen to fix what their log is actually short of rather
+than a generic healthy-eating list. If they are short on fibre, say so and name foods that fix it.
+
+SWAPS WORTH MAKING
+Two or three direct substitutions, each with the calorie or protein difference. Swap things they
+already eat for things they would plausibly also eat.
+
+Judge foods by what they contribute against what they cost, not by whether they are virtuous. A
+steak earns its calories; a pastry mostly does not; a banana sits in between and that is fine. Never
+call food "clean", "junk", or "cheating", and do not moralise about willpower.
+
+Be honest when the data is thin. If they have only logged a few meals, say the patterns are not
+reliable yet rather than inventing trends from three data points.`;
+
+export const reviewMeals = onCall(RUNTIME, async (request) => {
+  const uid = requireUser(request);
+  const { meals = [], targets, days = 7 } = request.data ?? {};
+
+  if (meals.length === 0) {
+    throw new HttpsError('failed-precondition', 'Log a few meals first.');
+  }
+
+  const lines = meals.map(
+    (m) =>
+      `${m.dayKey} ${m.mealType}: ${m.name} — ${Math.round(m.calories)} kcal, ` +
+      `${Math.round(m.protein)}g protein, ${Math.round(m.carbs)}g carbs, ${Math.round(m.fat)}g fat` +
+      (m.items?.length ? ` [${m.items.join(', ')}]` : '')
+  );
+
+  const totalCalories = meals.reduce((sum, m) => sum + m.calories, 0);
+  const loggedDays = new Set(meals.map((m) => m.dayKey)).size;
+
+  const prompt = [
+    `Targets: ${Math.round(targets?.calories ?? 0)} kcal and ${Math.round(targets?.protein ?? 0)} g protein a day.`,
+    `Logged: ${meals.length} meals across ${loggedDays} days (last ${days} days).`,
+    `Averaging ${Math.round(totalCalories / Math.max(loggedDays, 1))} kcal per logged day.`,
+    '',
+    'The meals:',
+    ...lines,
+  ].join('\n');
+
+  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value().replace(/[^\x21-\x7E]/g, '') });
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 4000,
+      system: REVIEW_SYSTEM,
+      // Finding patterns across a week of meals is genuine analysis, unlike the
+      // single-meal coach reply.
+      output_config: { effort: 'medium' },
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    if (response.stop_reason === 'refusal') {
+      throw new HttpsError('invalid-argument', 'Claude declined to answer that.');
+    }
+    const text = response.content.find((block) => block.type === 'text')?.text ?? '';
+    logger.info('Review generated', { uid, mealCount: meals.length, loggedDays });
+    return { text };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    logger.error('Review failed', { uid, anthropicDetail: error.error?.error?.message ?? error.message });
+    throw new HttpsError('internal', 'Could not generate a review right now.');
+  }
+});
+
 export const coachMeal = onCall(RUNTIME, async (request) => {
   const uid = requireUser(request);
   const { totals, targets, meals = [], question = '' } = request.data ?? {};
