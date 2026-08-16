@@ -30,15 +30,19 @@ export default function ReviewScreen() {
     [meals, since]
   );
 
-  // Worst first: the point of the list is what to change, not what to admire.
+  // Both ends matter. Showing only the worst reads as nagging and hides the more
+  // useful half — the meals already worth repeating.
   const scored = useMemo(
     () =>
       recent
         .map((meal) => ({ ...meal, score: mealQuality(meal.totals) }))
         .filter((meal) => meal.score !== null)
-        .sort((a, b) => a.score - b.score),
+        .sort((a, b) => b.score - a.score),
     [recent]
   );
+
+  const best = scored.slice(0, 5);
+  const worst = [...scored].reverse().slice(0, 5);
 
   async function run() {
     setLoading(true);
@@ -108,33 +112,53 @@ export default function ReviewScreen() {
         <Text style={styles.hint}>Log at least three meals for this to say anything useful.</Text>
       ) : null}
 
-      <Text style={styles.sectionHeading}>Least nutrition per calorie</Text>
-      <Text style={styles.sectionSub}>
-        Scored on protein and fibre against calories, with added sugar counting against. It's a
-        measure of value, not virtue — a steak scores well and so does an apple.
-      </Text>
+      <Card style={styles.explainer}>
+        <Text style={styles.explainerTitle}>What the number means</Text>
+        <Text style={styles.explainerBody}>
+          Every meal is scored out of 100 on how much nutrition it delivered for what it cost in
+          calories. Protein and fibre push it up, added sugar pulls it down.{'\n\n'}
+          <Text style={styles.bold}>70+</Text> earns its calories ·{' '}
+          <Text style={styles.bold}>45–69</Text> reasonable ·{' '}
+          <Text style={styles.bold}>25–44</Text> light on nutrition ·{' '}
+          <Text style={styles.bold}>under 25</Text> mostly empty calories{'\n\n'}
+          It measures value, not virtue. A steak scores well and so does an apple. A low score
+          isn't a food you must never eat — it's one that cost you a lot of your day's budget and
+          gave little back.
+        </Text>
+      </Card>
 
-      {scored.slice(0, 10).map((meal) => {
-        const label = qualityLabel(meal.score);
-        return (
-          <Card key={meal.id} style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.mealName} numberOfLines={1}>
-                {meal.name}
-              </Text>
-              <Text style={styles.mealMeta}>
-                {Math.round(meal.totals.calories)} kcal ·{' '}
-                {Math.round(meal.totals.protein)} g protein
-              </Text>
-              <View style={{ marginTop: spacing.xs }}>
-                <Pill tone={label.tone}>{label.text}</Pill>
-              </View>
-            </View>
-            <Text style={[styles.score, { color: scoreColor(meal.score) }]}>{meal.score}</Text>
-          </Card>
-        );
-      })}
+      <Text style={styles.sectionHeading}>Worth repeating</Text>
+      <Text style={styles.sectionSub}>Best value you ate this week.</Text>
+      {best.map((meal) => (
+        <MealRow key={meal.id} meal={meal} />
+      ))}
+
+      <Text style={styles.sectionHeading}>Costing you most</Text>
+      <Text style={styles.sectionSub}>Most calories for the least nutrition.</Text>
+      {worst.map((meal) => (
+        <MealRow key={meal.id} meal={meal} />
+      ))}
     </ScrollView>
+  );
+}
+
+function MealRow({ meal }) {
+  const label = qualityLabel(meal.score);
+  return (
+    <Card style={styles.row}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.mealName} numberOfLines={1}>
+          {meal.name}
+        </Text>
+        <Text style={styles.mealMeta}>
+          {Math.round(meal.totals.calories)} kcal · {Math.round(meal.totals.protein)} g protein
+        </Text>
+        <View style={{ marginTop: spacing.xs }}>
+          <Pill tone={label.tone}>{label.text}</Pill>
+        </View>
+      </View>
+      <Text style={[styles.score, { color: scoreColor(meal.score) }]}>{meal.score}</Text>
+    </Card>
   );
 }
 
@@ -169,6 +193,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: spacing.md,
   },
+
+  explainer: { backgroundColor: colors.primarySoft, borderColor: colors.primary, marginTop: spacing.xl },
+  explainerTitle: { fontSize: fonts.body, fontWeight: '700', color: colors.ink, marginBottom: spacing.sm },
+  explainerBody: { fontSize: fonts.small, color: colors.ink, lineHeight: 21 },
+  bold: { fontWeight: '700' },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   mealName: { fontSize: fonts.body, fontWeight: '600', color: colors.ink },
