@@ -1,0 +1,249 @@
+/**
+ * Noodle Cloud Functions.
+ *
+ * Two callables, both requiring an authenticated user:
+ *   analyzeMeal  — meal photo in, itemised nutrition estimate out
+ *   coachMeal    — the day so far in, a concrete suggestion for the next meal out
+ *
+ * The Anthropic key lives here rather than in the app because anything shipped in
+ * an Expo bundle is readable by anyone who installs it.
+ */
+
+import { initializeApp } from 'firebase-admin/app';
+import { defineSecret } from 'firebase-functions/params';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { logger } from 'firebase-functions';
+import Anthropic from '@anthropic-ai/sdk';
+
+import { MEAL_SCHEMA, SYSTEM_PROMPT } from './schema.js';
+import { lookupFood, scaleToGrams } from './usda.js';
+
+initializeApp();
+
+const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+
+// USDA asks that keys not be made public, so this lives in Secret Manager alongside
+// the Anthropic key rather than in an env file. If a lookup fails for any reason the
+// item falls back to Claude's own estimate, which the app labels "Estimated" rather
+// than "USDA" so the degradation is visible rather than silent.
+const USDA_API_KEY = defineSecret('USDA_API_KEY');
+
+const MODEL = 'claude-opus-5';
+
+const RUNTIME = {
+  region: 'us-central1',
+  secrets: [ANTHROPIC_API_KEY, USDA_API_KEY],
+  memory: '512MiB',
+  timeoutSeconds: 120,
+  // One user, one phone. Without a ceiling a runaway retry loop can bill unbounded.
+  maxInstances: 3,
+};
+
+function requireUser(request) {
+  if (!request.auth?.uid) {
+    throw new HttpsError('unauthenticated', 'Sign in to use Noodle.');
+  }
+  return request.auth.uid;
+}
+
+/** Pull the JSON payload out of a structured-outputs response. */
+function readStructuredJson(response) {
+  // Opus 5 runs adaptive thinking by default, so the text block is not necessarily
+  // first — and on a refusal there may be no text block at all.
+  if (response.stop_reason === 'refusal') {
+    throw new HttpsError(
+      'invalid-argument',
+      'Claude declined to analyse that image. Try a different photo.'
+    );
+  }
+  if (response.stop_reason === 'max_tokens') {
+    throw new HttpsError(
+      'resource-exhausted',
+      'The analysis was cut short. Try a photo with fewer separate items.'
+    );
+  }
+
+  const text = response.content.find((block) => block.type === 'text')?.text;
+  if (!text) {
+    throw new HttpsError('internal', 'Claude returned no analysis for that image.');
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new HttpsError('internal', 'Could not read the analysis Claude returned.');
+  }
+}
+
+export const analyzeMeal = onCall(RUNTIME, async (request) => {
+  const uid = requireUser(request);
+  const { imageBase64, mimeType = 'image/jpeg', mealType = 'meal', hint = '' } = request.data ?? {};
+
+  if (typeof imageBase64 !== 'string' || imageBase64.length < 100) {
+    throw new HttpsError('invalid-argument', 'No photo was included in the request.');
+  }
+  // Callable payloads cap at 10 MB; the app already downscales, so anything this
+  // large is a bug worth failing loudly on rather than paying to send.
+  if (imageBase64.length > 7_000_000) {
+    throw new HttpsError('invalid-argument', 'That photo is too large. Retake it and try again.');
+  }
+
+  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+
+  const userText =
+    `This is my ${mealType}.` +
+    (hint ? ` Extra context from me: ${hint}` : '') +
+    '\n\nIdentify everything in the photo and estimate the weight of each component.';
+
+  let response;
+  try {
+    response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      system: SYSTEM_PROMPT,
+      output_config: {
+        // Portion estimation is the accuracy bottleneck and benefits from real
+        // reasoning; medium keeps that without paying for xhigh on every photo.
+        effort: 'medium',
+        format: { type: 'json_schema', schema: MEAL_SCHEMA },
+      },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+            { type: 'text', text: userText },
+          ],
+        },
+      ],
+    });
+  } catch (error) {
+    logger.error('Anthropic call failed', { uid, message: error.message, status: error.status });
+    if (error.status === 429) {
+      throw new HttpsError('resource-exhausted', 'Rate limited — try again in a moment.');
+    }
+    throw new HttpsError('internal', 'Could not reach the analysis service.');
+  }
+
+  const analysis = readStructuredJson(response);
+
+  if (!analysis.isFood || analysis.items.length === 0) {
+    return { isFood: false, mealName: '', items: [], questions: [], notes: analysis.notes ?? '' };
+  }
+
+  const usdaKey = USDA_API_KEY.value();
+
+  // Every item is an independent lookup, so fan out rather than walking the list.
+  const items = await Promise.all(
+    analysis.items.map(async (item, index) => {
+      const match = await lookupFood(item.usdaQuery, usdaKey);
+      const per100g = match ? match.per100g : item.fallbackPer100g;
+
+      return {
+        id: `item-${index}`,
+        label: item.label,
+        grams: Math.round(item.grams),
+        gramsLow: Math.round(item.gramsLow),
+        gramsHigh: Math.round(item.gramsHigh),
+        confidence: item.confidence,
+        per100g,
+        // Surfaced in the UI so the user can see whether a number came from the
+        // database or from the model guessing, and judge it accordingly.
+        source: match
+          ? { type: 'usda', description: match.description, fdcId: match.fdcId }
+          : { type: 'estimate', description: 'Estimated by Claude — no USDA match', fdcId: null },
+        base: scaleToGrams(per100g, item.grams),
+      };
+    })
+  );
+
+  logger.info('Meal analysed', {
+    uid,
+    itemCount: items.length,
+    matched: items.filter((i) => i.source.type === 'usda').length,
+    inputTokens: response.usage?.input_tokens,
+    outputTokens: response.usage?.output_tokens,
+  });
+
+  return {
+    isFood: true,
+    mealName: analysis.mealName,
+    items,
+    questions: analysis.questions ?? [],
+    notes: analysis.notes ?? '',
+  };
+});
+
+const COACH_SYSTEM = `You advise a single user on what to eat next, given what they have already
+eaten today and the targets they are working to. They are losing weight while trying to keep protein
+high enough to hold onto muscle.
+
+Answer in three short parts, as plain sentences with no headers or bullets:
+first, one sentence on where the day stands — the number that matters, not a recital of every macro;
+then two or three specific things they could eat next, each with a rough calorie and protein figure,
+sized to fit what is actually left in the budget;
+finally, one sentence of practical advice only if there is something genuinely worth flagging.
+
+Be concrete. "Greek yogurt with berries, about 200 kcal and 20 g protein" is useful; "consider a
+high-protein snack" is not. Suggest real food they could plausibly get hold of, not recipes.
+
+If they have already eaten well past the budget, say so plainly once and move on to what would make
+the rest of the day better. Do not moralise, do not lecture about discipline, and do not pad the
+answer with caveats about consulting a professional.`;
+
+export const coachMeal = onCall(RUNTIME, async (request) => {
+  const uid = requireUser(request);
+  const { totals, targets, meals = [], question = '' } = request.data ?? {};
+
+  if (!totals || !targets) {
+    throw new HttpsError('invalid-argument', 'Missing the day so far.');
+  }
+
+  const eaten = meals
+    .map((m) => `- ${m.mealType}: ${m.name} (${Math.round(m.calories)} kcal, ${Math.round(m.protein)} g protein)`)
+    .join('\n');
+
+  const prompt = [
+    `Local time: ${request.data.localTime ?? 'unknown'}`,
+    '',
+    'Targets for the day:',
+    `- Calories: ${Math.round(targets.calories)} kcal`,
+    `- Protein: ${Math.round(targets.protein)} g`,
+    '',
+    'Eaten so far:',
+    eaten || '- Nothing yet.',
+    '',
+    'Running totals:',
+    `- ${Math.round(totals.calories)} kcal, ${Math.round(totals.protein)} g protein, ` +
+      `${Math.round(totals.carbs)} g carbs, ${Math.round(totals.fat)} g fat`,
+    '',
+    `Remaining: ${Math.round(targets.calories - totals.calories)} kcal and ` +
+      `${Math.round(targets.protein - totals.protein)} g protein.`,
+    question ? `\nTheir question: ${question}` : '\nWhat should they eat next?',
+  ].join('\n');
+
+  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 2000,
+      system: COACH_SYSTEM,
+      // Arithmetic against a budget plus a few suggestions — no deep reasoning needed.
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    if (response.stop_reason === 'refusal') {
+      throw new HttpsError('invalid-argument', 'Claude declined to answer that.');
+    }
+
+    const text = response.content.find((block) => block.type === 'text')?.text ?? '';
+    logger.info('Coach answered', { uid, outputTokens: response.usage?.output_tokens });
+    return { text };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    logger.error('Coach call failed', { uid, message: error.message });
+    throw new HttpsError('internal', 'Could not reach the coach right now.');
+  }
+});

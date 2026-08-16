@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Meal photos, one folder per user. Capped at 8 MB so a bug or a bad actor
+    // cannot fill the bucket, and restricted to images so the path cannot be used
+    // as general file hosting.
+    match /users/{uid}/meals/{photo} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
