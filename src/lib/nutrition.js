@@ -99,7 +99,13 @@ export function resolveMeal(items, itemStates, questions, answers) {
 
   for (const item of items) {
     const result = resolveItem(item, itemStates?.[item.id], questions, answers);
-    resolved.push({ ...item, ...result });
+    // `grams` stays the model's original estimate and the eaten weight lands in
+    // `resolvedGrams`. Overwriting `grams` here meant the portion dropdown rebuilt
+    // its options from the already-adjusted weight every render, so choosing "about
+    // half" halved the options too and left the field with nothing selected. It also
+    // makes a saved meal replayable: keeping the base means re-running this function
+    // with the same answers reproduces the same totals.
+    resolved.push({ ...item, resolvedGrams: result.grams, macros: result.macros });
     totals = addMacros(totals, result.macros);
   }
 

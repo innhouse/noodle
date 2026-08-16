@@ -1,12 +1,21 @@
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useAuth } from '../context/AuthContext';
 import { dayKey, guessMealType, MEAL_TYPES } from '../lib/dates';
 import { prepareImage, uriToBlob } from '../lib/image';
 import { PORTION_CHOICES, resolveMeal } from '../lib/nutrition';
-import { analyzeMealPhoto, saveMeal, uploadMealPhoto } from '../lib/store';
+import { analyzeMealPhoto, saveMeal, uploadMealPhoto, watchRecentMeals } from '../lib/store';
 import { colors, confidenceColor, fonts, radius, spacing } from '../theme';
 import { Button, Card, Dropdown, Empty, Field, Pill, Segmented } from '../ui';
 
@@ -31,6 +40,34 @@ export default function LogMealScreen({ onDone, onCancel }) {
   const [itemStates, setItemStates] = useState({});
   const [answers, setAnswers] = useState({});
   const [saving, setSaving] = useState(false);
+
+  // Meals already logged, so a repeat can skip the camera and the API call entirely.
+  const [recent, setRecent] = useState([]);
+  // Set when replaying a past meal — its photo is already in Storage, so it gets
+  // referenced rather than uploaded again.
+  const [reusedPhotoUrl, setReusedPhotoUrl] = useState(null);
+  // A note typed after seeing the result, to re-run the analysis with context the
+  // photo could not carry.
+  const [correction, setCorrection] = useState('');
+  const [reanalyzing, setReanalyzing] = useState(false);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    return watchRecentMeals(user.uid, setRecent, 60);
+  }, [user]);
+
+  // One entry per distinct meal, most recent first. Eating the same breakfast all
+  // week should offer one row, not seven identical ones.
+  const repeatable = useMemo(() => {
+    const seen = new Map();
+    for (const meal of recent) {
+      if (!meal.items?.length) continue;
+      const key = meal.name?.toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.set(key, meal);
+    }
+    return [...seen.values()].slice(0, 8);
+  }, [recent]);
 
   const resolved = useMemo(() => {
     if (!analysis?.items) return null;
@@ -65,6 +102,56 @@ export default function LogMealScreen({ onDone, onCancel }) {
     }
   }
 
+  /**
+   * Re-run the analysis on the same photo with a correction the user has typed.
+   *
+   * The dropdowns can only scale what the model already found; they cannot tell it
+   * that half the food was outside the frame. "There were two slices, this is half
+   * of one" is a four-fold error no portion control can reach, and re-analysing with
+   * that sentence is both more accurate and easier than doing the arithmetic.
+   */
+  async function reanalyze() {
+    if (!photo?.base64 || !correction.trim()) return;
+    setReanalyzing(true);
+    setError('');
+    try {
+      const combined = [hint.trim(), correction.trim()].filter(Boolean).join('. ');
+      const data = await analyzeMealPhoto({
+        imageBase64: photo.base64,
+        mimeType: photo.mimeType,
+        mealType,
+        hint: combined,
+      });
+      if (data.isFood) {
+        applyAnalysis(data);
+        setHint(combined);
+        setCorrection('');
+      }
+    } catch (caught) {
+      setError(caught.message ?? 'Could not re-analyse that photo.');
+    } finally {
+      setReanalyzing(false);
+    }
+  }
+
+  /** Load an analysis result into the confirm screen's editable state. */
+  function applyAnalysis(data) {
+    setAnalysis(data);
+    setItemStates(
+      Object.fromEntries(data.items.map((item) => [item.id, { portion: 1, grams: item.grams }]))
+    );
+    // Pre-select each question's most likely answer so the totals are usable
+    // immediately; the user only touches the ones the model guessed wrong.
+    setAnswers(
+      Object.fromEntries(
+        data.questions.map((question) => [
+          question.id,
+          Math.max(question.options.findIndex((option) => option.isDefault), 0),
+        ])
+      )
+    );
+  }
+
   async function analyze(asset) {
     setPhase('analyzing');
     setError('');
@@ -84,25 +171,38 @@ export default function LogMealScreen({ onDone, onCancel }) {
         return;
       }
 
-      setAnalysis(data);
-      setItemStates(
-        Object.fromEntries(data.items.map((item) => [item.id, { portion: 1, grams: item.grams }]))
-      );
-      // Pre-select each question's most likely answer so the totals are usable
-      // immediately; the user only touches the ones the model guessed wrong.
-      setAnswers(
-        Object.fromEntries(
-          data.questions.map((question) => [
-            question.id,
-            Math.max(question.options.findIndex((option) => option.isDefault), 0),
-          ])
-        )
-      );
+      applyAnalysis(data);
       setPhase('confirm');
     } catch (caught) {
       setError(caught.message ?? 'Could not analyse that photo.');
       setPhase('choose');
     }
+  }
+
+  /**
+   * Replay a previously logged meal.
+   *
+   * Because `grams` on a saved item is the original estimate rather than the eaten
+   * weight, restoring the saved answers and portion states through resolveMeal
+   * reproduces the same totals exactly — and every dropdown still works, so a
+   * slightly different portion this time is one tap away.
+   */
+  function relog(meal) {
+    setAnalysis({
+      isFood: true,
+      mealName: meal.name,
+      items: meal.items,
+      questions: meal.questions ?? [],
+      notes: '',
+    });
+    setItemStates(
+      meal.itemStates ??
+        Object.fromEntries(meal.items.map((item) => [item.id, { portion: 1, grams: item.grams }]))
+    );
+    setAnswers(meal.answers ?? {});
+    setReusedPhotoUrl(meal.photoUrl ?? null);
+    setPhoto(null);
+    setPhase('confirm');
   }
 
   async function save() {
@@ -117,7 +217,12 @@ export default function LogMealScreen({ onDone, onCancel }) {
         items: resolved.items.map((item) => ({
           id: item.id,
           label: item.label,
+          // Both weights are kept: `grams` is the model's estimate, which is what
+          // "log this again" replays from, and `resolvedGrams` is what was eaten.
           grams: Math.round(item.grams),
+          gramsLow: item.gramsLow,
+          gramsHigh: item.gramsHigh,
+          resolvedGrams: Math.round(item.resolvedGrams),
           per100g: item.per100g,
           source: item.source,
           confidence: item.confidence,
@@ -129,21 +234,19 @@ export default function LogMealScreen({ onDone, onCancel }) {
         totals: resolved.totals,
         notes: analysis.notes ?? '',
         hint: hint.trim(),
+        // A replayed meal points at the original's photo rather than duplicating it.
+        ...(reusedPhotoUrl ? { photoUrl: reusedPhotoUrl } : {}),
       });
 
-      // The photo is a nice-to-have for the history view; a Storage hiccup should
-      // never cost the user the meal they just logged.
-      if (photo?.uri) {
-        try {
-          const blob = await uriToBlob(photo.uri);
-          const url = await uploadMealPhoto(user.uid, mealId, blob);
-          await saveMeal(user.uid, { id: mealId, photoUrl: url });
-        } catch (caught) {
-          console.warn('photo upload failed', caught);
-        }
-      }
-
+      // Close the screen as soon as the meal is in Firestore. The photo is
+      // decoration for the history list, and it used to be awaited here — so a
+      // stalled upload (Storage has no built-in timeout) left the save button
+      // spinning forever on a meal that had already been logged successfully.
       onDone();
+
+      if (photo?.uri) {
+        uploadPhotoInBackground(user.uid, mealId, photo.uri);
+      }
     } catch (caught) {
       Alert.alert('Could not save', caught.message ?? 'Something went wrong.');
       setSaving(false);
@@ -198,6 +301,28 @@ export default function LogMealScreen({ onDone, onCancel }) {
         </Card>
 
         {analysis.notes ? <Text style={styles.notes}>{analysis.notes}</Text> : null}
+
+        {photo?.base64 ? (
+          <Card>
+            <Field
+              label="Got something wrong?"
+              placeholder="e.g. there were 2 slices, this is half of one"
+              value={correction}
+              onChangeText={setCorrection}
+              multiline
+              hint="Tell it what the photo couldn't show and it will estimate again. The dropdowns below only scale what it already found — this can change what it found."
+            />
+            <Button
+              title="Look again with this note"
+              variant="secondary"
+              onPress={reanalyze}
+              loading={reanalyzing}
+              disabled={!correction.trim()}
+            />
+          </Card>
+        ) : null}
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {analysis.questions.length > 0 ? (
           <>
@@ -262,7 +387,7 @@ export default function LogMealScreen({ onDone, onCancel }) {
               />
 
               <Text style={styles.itemMacros}>
-                {Math.round(item.grams)} g · {Math.round(item.macros.protein)} g protein ·{' '}
+                {Math.round(item.resolvedGrams)} g · {Math.round(item.macros.protein)} g protein ·{' '}
                 {Math.round(item.macros.carbs)} g carbs · {Math.round(item.macros.fat)} g fat
               </Text>
             </Card>
@@ -310,9 +435,66 @@ export default function LogMealScreen({ onDone, onCancel }) {
       <Button title="Take a photo" onPress={() => pick(true)} />
       <View style={{ height: spacing.sm }} />
       <Button title="Choose from library" variant="secondary" onPress={() => pick(false)} />
+
+      {repeatable.length > 0 ? (
+        <>
+          <Text style={styles.sectionHeading}>Log it again</Text>
+          <Text style={styles.sectionSub}>
+            Something you've eaten before, with no photo and no waiting.
+          </Text>
+          {repeatable.map((meal) => (
+            <Pressable key={meal.id} onPress={() => relog(meal)}>
+              <Card style={styles.repeatCard}>
+                {meal.photoUrl ? (
+                  <Image source={{ uri: meal.photoUrl }} style={styles.repeatPhoto} />
+                ) : (
+                  <View style={[styles.repeatPhoto, styles.repeatPhotoEmpty]}>
+                    <Text style={styles.repeatPhotoEmptyText}>🍽</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.repeatName} numberOfLines={1}>
+                    {meal.name}
+                  </Text>
+                  <Text style={styles.repeatMeta}>
+                    {Math.round(meal.totals?.calories ?? 0)} kcal ·{' '}
+                    {Math.round(meal.totals?.protein ?? 0)} g protein
+                  </Text>
+                </View>
+                <Text style={styles.repeatChevron}>›</Text>
+              </Card>
+            </Pressable>
+          ))}
+        </>
+      ) : null}
+
       <Button title="Cancel" variant="ghost" onPress={onCancel} />
     </ScrollView>
   );
+}
+
+/**
+ * Attach a photo to an already-saved meal, without the UI waiting on it.
+ *
+ * Deliberately detached from component state: the log screen has already closed by
+ * the time this runs, so there is nothing to update and nothing to block. The photo
+ * appearing a few seconds late in the history list is invisible; a hung upload
+ * holding the whole screen hostage was not.
+ */
+async function uploadPhotoInBackground(uid, mealId, uri) {
+  try {
+    const blob = await uriToBlob(uri);
+    const url = await Promise.race([
+      uploadMealPhoto(uid, mealId, blob),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('photo upload timed out')), 60_000)
+      ),
+    ]);
+    await saveMeal(uid, { id: mealId, photoUrl: url });
+  } catch (error) {
+    // The meal itself is safe; losing its picture is not worth surfacing.
+    console.warn('photo upload failed', error);
+  }
 }
 
 function MacroChip({ label, value, color }) {
@@ -433,6 +615,14 @@ const styles = StyleSheet.create({
   confidence: { fontSize: fonts.tiny, fontWeight: '600', textTransform: 'capitalize' },
   itemSource: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.xs, marginBottom: spacing.md },
   itemMacros: { fontSize: fonts.small, color: colors.inkSoft },
+
+  repeatCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  repeatPhoto: { width: 48, height: 48, borderRadius: radius - 6 },
+  repeatPhotoEmpty: { backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  repeatPhotoEmptyText: { fontSize: 22 },
+  repeatName: { fontSize: fonts.body, fontWeight: '600', color: colors.ink },
+  repeatMeta: { fontSize: fonts.small, color: colors.inkSoft, marginTop: 2 },
+  repeatChevron: { fontSize: fonts.title, color: colors.inkSoft },
 
   fieldLabel: {
     fontSize: fonts.small,

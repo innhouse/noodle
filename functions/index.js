@@ -88,7 +88,14 @@ export const analyzeMeal = onCall(RUNTIME, async (request) => {
     throw new HttpsError('invalid-argument', 'That photo is too large. Retake it and try again.');
   }
 
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+  const rawKey = ANTHROPIC_API_KEY.value();
+  // Strip everything that cannot legitimately appear in an API key rather than just
+  // trimming the ends. A key routed through a rich-text editor or a terminal paste
+  // can pick up a trailing newline, a non-breaking space, or a zero-width character
+  // mid-string — all invisible, all fatal, and none of them visibly wrong when you
+  // check the key by eye. Keys are printable ASCII, so anything else is paste damage.
+  const apiKey = rawKey.replace(/[^\x21-\x7E]/g, '');
+  const anthropic = new Anthropic({ apiKey });
 
   const userText =
     `This is my ${mealType}.` +
@@ -118,7 +125,45 @@ export const analyzeMeal = onCall(RUNTIME, async (request) => {
       ],
     });
   } catch (error) {
-    logger.error('Anthropic call failed', { uid, message: error.message, status: error.status });
+    // Field names here deliberately avoid `message` and `status`: firebase-functions'
+    // logger owns those keys on a structured entry and silently overwrites them with
+    // its own, which meant every log of this failure showed a stack trace instead of
+    // what Anthropic actually said.
+    logger.error('Anthropic call failed', {
+      uid,
+      anthropicStatus: error.status,
+      anthropicType: error.error?.error?.type ?? error.name,
+      anthropicDetail: error.error?.error?.message ?? error.message,
+    });
+
+    // Distinguish the failures that need different fixes. A generic "could not
+    // reach the service" sent the user hunting for a network problem when the real
+    // cause was a bad key, which is only visible in the Cloud Function logs.
+    if (error.status === 401) {
+      // Describe the stored key's shape without ever logging the key itself. A
+      // valid Anthropic key is ~108 characters starting "sk-ant-api03-", so a
+      // wrong length or prefix identifies a truncated paste or a swapped secret
+      // immediately — otherwise diagnosing this means guessing.
+      logger.error('Anthropic rejected the API key', {
+        rawLength: rawKey.length,
+        cleanedLength: apiKey.length,
+        // A gap between these two means the stored secret carried invisible
+        // characters; a cleaned length far off ~108 means it was truncated.
+        keyPrefix: apiKey.slice(0, 13),
+        looksLikeAnthropicKey: apiKey.startsWith('sk-ant-'),
+        anthropicDetail: error.error?.error?.message ?? error.message,
+      });
+      throw new HttpsError(
+        'failed-precondition',
+        'The Anthropic API key is not valid. Check the ANTHROPIC_API_KEY secret.'
+      );
+    }
+    if (error.status === 400 && /credit|balance/i.test(error.message ?? '')) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The Anthropic account is out of credit. Top it up in the Claude Console.'
+      );
+    }
     if (error.status === 429) {
       throw new HttpsError('resource-exhausted', 'Rate limited — try again in a moment.');
     }
