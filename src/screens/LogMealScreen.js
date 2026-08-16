@@ -456,7 +456,13 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
 
               <Dropdown
                 label="Portion size on the plate"
-                hint={`Claude estimated ${item.grams} g (range ${item.gramsLow}–${item.gramsHigh} g)`}
+                // Meals logged before the range fields existed have no low/high, and
+                // printing them regardless produced "range undefined–undefined g".
+                hint={
+                  item.gramsLow && item.gramsHigh
+                    ? `Claude estimated ${item.grams} g (range ${item.gramsLow}–${item.gramsHigh} g)`
+                    : `Claude estimated ${item.grams} g`
+                }
                 value={state.grams ?? item.grams}
                 options={gramOptions(item)}
                 onChange={(grams) => setItemState(item.id, { grams })}
