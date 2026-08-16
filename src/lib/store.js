@@ -60,9 +60,29 @@ export function watchRecentMeals(uid, callback, max = 40) {
   );
 }
 
+/**
+ * Recursively replace undefined with null.
+ *
+ * Firestore rejects undefined outright rather than skipping the field, so a meal
+ * saved by an older build — missing fields that later versions write — fails to
+ * save the moment it is edited. Normalising here means every write is safe rather
+ * than every call site having to remember.
+ */
+function withoutUndefined(value) {
+  if (value === undefined) return null;
+  if (Array.isArray(value)) return value.map(withoutUndefined);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, inner]) => [key, withoutUndefined(inner)])
+    );
+  }
+  return value;
+}
+
 export function saveMeal(uid, meal) {
   const id = meal.id ?? doc(collection(db, 'users', uid, 'meals')).id;
-  return setDoc(doc(db, 'users', uid, 'meals', id), { ...meal, id }, { merge: true }).then(() => id);
+  const payload = withoutUndefined({ ...meal, id });
+  return setDoc(doc(db, 'users', uid, 'meals', id), payload, { merge: true }).then(() => id);
 }
 
 export function deleteMeal(uid, mealId) {
