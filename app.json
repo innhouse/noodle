@@ -8,9 +8,10 @@
     "scheme": "noodle",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "splash": {
       "resizeMode": "contain",
-      "backgroundColor": "#0F1115"
+      "backgroundColor": "#3F7D58"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -20,18 +21,19 @@
       "bundleIdentifier": "com.innhouse.noodle",
       "infoPlist": {
         "NSCameraUsageDescription": "Noodle uses the camera so you can photograph a meal and have it logged automatically.",
-        "NSPhotoLibraryUsageDescription": "Noodle needs access to your photos so you can log a meal from a picture you already took."
+        "NSPhotoLibraryUsageDescription": "Noodle needs access to your photos so you can log a meal from a picture you already took.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.innhouse.noodle",
       "adaptiveIcon": {
-        "backgroundColor": "#0F1115"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#3F7D58"
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.READ_MEDIA_IMAGES"
       ]
     },
     "web": {
