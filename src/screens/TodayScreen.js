@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
-import { addDays, dayKey, formatDayLabel, formatTime, isToday } from '../lib/dates';
+import { addDays, dayKey, formatDayLabel, formatTime, isToday, MEAL_TYPES } from '../lib/dates';
 import { activityBonus, perMealProtein, sumMeals } from '../lib/nutrition';
 import { activeEnergyForDay, healthSupported, requestHealthAccess } from '../lib/health';
 import { deleteMeal, watchMeals } from '../lib/store';
@@ -56,6 +56,25 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
       subscription.remove();
     };
   }, [day]);
+
+  // Group by sitting, not by log entry.
+  //
+  // Breakfast photographed as three separate plates is one breakfast, and the
+  // protein target belongs to the sitting. Judging each entry separately held a
+  // cup of coffee to the same 40 g target as the meal it came with.
+  const groups = useMemo(() => {
+    const byType = new Map();
+    for (const meal of meals) {
+      const list = byType.get(meal.mealType) ?? [];
+      list.push(meal);
+      byType.set(meal.mealType, list);
+    }
+    return MEAL_TYPES.filter((type) => byType.has(type)).map((type) => ({
+      type,
+      meals: byType.get(type),
+      totals: sumMeals(byType.get(type)),
+    }));
+  }, [meals]);
 
   const totals = sumMeals(meals);
   const bonus = activityBonus(profile, activeEnergy);
@@ -138,60 +157,70 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
         </>
       ) : null}
 
-      <Text style={styles.sectionHeading}>
-        {meals.length === 0 ? 'Nothing logged' : `${meals.length} meal${meals.length === 1 ? '' : 's'}`}
-      </Text>
-
       {meals.length === 0 ? (
-        <Empty
-          title="No meals yet"
-          body={isToday(day) ? 'Photograph your next meal to start the day.' : 'Nothing was logged on this day.'}
-        />
+        <>
+          <Text style={styles.sectionHeading}>Nothing logged</Text>
+          <Empty
+            title="No meals yet"
+            body={isToday(day) ? 'Photograph your next meal to start the day.' : 'Nothing was logged on this day.'}
+          />
+        </>
       ) : (
-        meals.map((meal) => (
-          <Pressable
-            key={meal.id}
-            onPress={() => onEditMeal(meal)}
-            onLongPress={() => confirmDelete(meal)}
-          >
-            <Card>
-              <View style={styles.mealRow}>
-                {meal.photoUrl ? (
-                  <Image source={{ uri: meal.photoUrl }} style={styles.mealPhoto} />
-                ) : (
-                  <View style={[styles.mealPhoto, styles.mealPhotoEmpty]}>
-                    <Text style={styles.mealPhotoEmptyText}>🍽</Text>
-                  </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <View style={styles.mealTitleRow}>
-                    <Text style={styles.mealName} numberOfLines={1}>
-                      {meal.name}
-                    </Text>
-                    <Text style={styles.mealCalories}>{Math.round(meal.totals.calories)}</Text>
-                  </View>
-                  <Text style={styles.mealMeta}>
-                    {capitalise(meal.mealType)} · {formatTime(meal.loggedAt)}
-                  </Text>
-                  <Text style={styles.mealMacros}>
-                    {Math.round(meal.totals.protein)}p · {Math.round(meal.totals.carbs)}c ·{' '}
-                    {Math.round(meal.totals.fat)}f
-                  </Text>
-                  {proteinVerdict(meal, targets) ? (
-                    <Text
-                      style={[
-                        styles.proteinVerdict,
-                        { color: proteinVerdict(meal, targets).colour },
-                      ]}
-                    >
-                      {proteinVerdict(meal, targets).text}
-                    </Text>
-                  ) : null}
-                </View>
+        groups.map((group) => {
+          const verdict = proteinVerdict(group, targets);
+          return (
+            <View key={group.type}>
+              <View style={styles.groupHeader}>
+                <Text style={styles.groupTitle}>{capitalise(group.type)}</Text>
+                <Text style={styles.groupTotals}>
+                  {Math.round(group.totals.calories)} kcal ·{' '}
+                  {Math.round(group.totals.protein)}p · {Math.round(group.totals.carbs)}c ·{' '}
+                  {Math.round(group.totals.fat)}f
+                </Text>
               </View>
-            </Card>
-          </Pressable>
-        ))
+              {verdict ? (
+                <Text style={[styles.proteinVerdict, { color: verdict.colour }]}>
+                  {verdict.text}
+                </Text>
+              ) : null}
+
+              {group.meals.map((meal) => (
+                <Pressable
+                  key={meal.id}
+                  onPress={() => onEditMeal(meal)}
+                  onLongPress={() => confirmDelete(meal)}
+                >
+                  <Card>
+                    <View style={styles.mealRow}>
+                      {meal.photoUrl ? (
+                        <Image source={{ uri: meal.photoUrl }} style={styles.mealPhoto} />
+                      ) : (
+                        <View style={[styles.mealPhoto, styles.mealPhotoEmpty]}>
+                          <Text style={styles.mealPhotoEmptyText}>🍽</Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.mealTitleRow}>
+                          <Text style={styles.mealName} numberOfLines={1}>
+                            {meal.name}
+                          </Text>
+                          <Text style={styles.mealCalories}>
+                            {Math.round(meal.totals.calories)}
+                          </Text>
+                        </View>
+                        <Text style={styles.mealMeta}>{formatTime(meal.loggedAt)}</Text>
+                        <Text style={styles.mealMacros}>
+                          {Math.round(meal.totals.protein)}p ·{' '}
+                          {Math.round(meal.totals.carbs)}c · {Math.round(meal.totals.fat)}f
+                        </Text>
+                      </View>
+                    </View>
+                  </Card>
+                </Pressable>
+              ))}
+            </View>
+          );
+        })
       )}
 
       {meals.length > 0 ? (
@@ -209,11 +238,11 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
  * than the same 130 g concentrated at dinner, and only a per-meal view shows the
  * difference.
  */
-function proteinVerdict(meal, targets) {
-  const target = perMealProtein(targets, meal.mealType);
+function proteinVerdict(group, targets) {
+  const target = perMealProtein(targets, group.type);
   if (!target) return null;
 
-  const protein = meal.totals?.protein ?? 0;
+  const protein = group.totals?.protein ?? 0;
   if (protein >= target) {
     return { text: `✓ ${Math.round(protein)}g protein — target met`, colour: colors.primary };
   }
@@ -271,7 +300,16 @@ const styles = StyleSheet.create({
   mealCalories: { fontSize: fonts.body, fontWeight: '700', color: colors.primary, marginLeft: spacing.sm },
   mealMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
   mealMacros: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.xs },
-  proteinVerdict: { fontSize: fonts.tiny, fontWeight: '700', marginTop: 3 },
+  proteinVerdict: { fontSize: fonts.small, fontWeight: '700', marginBottom: spacing.sm },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  groupTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
+  groupTotals: { fontSize: fonts.small, color: colors.inkSoft },
 
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'center', marginTop: spacing.md },
 });
