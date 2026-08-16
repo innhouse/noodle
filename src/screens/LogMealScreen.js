@@ -14,7 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { dayKey, guessMealType, MEAL_TYPES } from '../lib/dates';
 import { prepareImage, uriToBlob } from '../lib/image';
-import { PORTION_CHOICES, resolveMeal } from '../lib/nutrition';
+import { perMealProtein, PORTION_CHOICES, resolveMeal } from '../lib/nutrition';
 import {
   analyzeMealPhoto,
   deleteMeal,
@@ -38,7 +38,7 @@ import { Button, Card, Dropdown, Empty, Field, Pill, Segmented } from '../ui';
 const MAX_PHOTOS = 6;
 
 export default function LogMealScreen({ onDone, onCancel, editMeal }) {
-  const { user } = useAuth();
+  const { user, targets } = useAuth();
   const [phase, setPhase] = useState(editMeal ? 'confirm' : 'choose');
   // Set when correcting an already-logged meal, so saving updates it in place
   // rather than adding a second copy of the same food to the day.
@@ -82,6 +82,8 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
     }
     return [...seen.values()].slice(0, 8);
   }, [recent]);
+
+  const proteinTarget = perMealProtein(targets, mealType);
 
   const resolved = useMemo(() => {
     if (!analysis?.items) return null;
@@ -359,6 +361,19 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
             <MacroChip label="Carbs" value={resolved.totals.carbs} color={colors.carbs} />
             <MacroChip label="Fat" value={resolved.totals.fat} color={colors.fat} />
           </View>
+
+          {proteinTarget ? (
+            <Text
+              style={[
+                styles.proteinTarget,
+                { color: resolved.totals.protein >= proteinTarget ? colors.primary : colors.accent },
+              ]}
+            >
+              {resolved.totals.protein >= proteinTarget
+                ? `Hits your ${proteinTarget} g protein target for this meal`
+                : `${Math.round(proteinTarget - resolved.totals.protein)} g short of ${proteinTarget} g for this meal`}
+            </Text>
+          ) : null}
         </Card>
 
         {analysis.notes ? <Text style={styles.notes}>{analysis.notes}</Text> : null}
@@ -722,6 +737,12 @@ const styles = StyleSheet.create({
   macroChip: { alignItems: 'center' },
   macroChipValue: { fontSize: fonts.big, fontWeight: '700' },
   macroChipLabel: { fontSize: fonts.tiny, color: colors.inkSoft, textTransform: 'uppercase' },
+  proteinTarget: {
+    fontSize: fonts.small,
+    fontWeight: '700',
+    marginTop: spacing.lg,
+    textAlign: 'center',
+  },
 
   notes: {
     fontSize: fonts.small,

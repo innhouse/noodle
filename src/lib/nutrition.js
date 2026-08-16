@@ -184,6 +184,24 @@ export function computeTargets(profile) {
 }
 
 /**
+ * Protein target for a single meal.
+ *
+ * Daily protein alone is a misleading number. Muscle protein synthesis is triggered
+ * per meal and saturates somewhere around 30-40 g, so 120 g spread evenly over three
+ * meals does more than the same 120 g eaten mostly at dinner — the surplus in one
+ * sitting is largely oxidised rather than banked. Spreading it is the point.
+ *
+ * Snacks are exempt: they are not a protein feeding, and holding a piece of fruit to
+ * a 40 g target would only produce noise.
+ */
+export function perMealProtein(targets, mealType) {
+  if (!targets?.protein || mealType === 'snack') return null;
+  // Against the three main meals rather than four; the snack's protein still counts
+  // towards the day, it just isn't held to a target of its own.
+  return Math.round(targets.protein / 3);
+}
+
+/**
  * Extra calories to allow for measured activity, if the user has opted in.
  *
  * Off by default, and discounted when on. Wearables overestimate active energy —
