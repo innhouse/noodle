@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { healthSupported } from '../lib/health';
 import { ACTIVITY_LEVELS, computeTargets, LOSS_RATES } from '../lib/nutrition';
 import {
   cmToFeetInches,
@@ -60,6 +61,7 @@ export default function SettingsScreen() {
       lossRate: draft.lossRate ?? 0.4536,
       manualCalories: Number(draft.manualCalories) || null,
       manualProtein: Number(draft.manualProtein) || null,
+      useActiveEnergy: Boolean(draft.useActiveEnergy),
     });
     setSaved(true);
   }
@@ -164,6 +166,22 @@ export default function SettingsScreen() {
               You burn roughly {preview.tdee} kcal a day ({preview.bmr} at rest).
             </Text>
           ) : null}
+        </Card>
+      ) : null}
+
+      {healthSupported ? (
+        <Card>
+          <Text style={styles.cardTitle}>Apple Health</Text>
+          <Dropdown
+            label="Count activity towards your budget?"
+            value={draft.useActiveEnergy ? 'yes' : 'no'}
+            options={[
+              { label: 'No — just show me the number', value: 'no', hint: 'Recommended' },
+              { label: 'Yes — add it to my budget', value: 'yes' },
+            ]}
+            onChange={(value) => set({ useActiveEnergy: value === 'yes' })}
+            hint="Trackers overestimate calories burned, often by a lot, and your activity level above already assumes a normal day's movement. When this is on, Noodle adds only half of what Health reports."
+          />
         </Card>
       ) : null}
 

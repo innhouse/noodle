@@ -3,23 +3,39 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 
 import { useAuth } from '../context/AuthContext';
 import { addDays, dayKey, formatDayLabel, formatTime, isToday } from '../lib/dates';
-import { sumMeals } from '../lib/nutrition';
+import { activityBonus, sumMeals } from '../lib/nutrition';
+import { activeEnergyToday, healthSupported, requestHealthAccess } from '../lib/health';
 import { deleteMeal, watchMeals } from '../lib/store';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Card, Empty, MacroBar } from '../ui';
 
 export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
-  const { user, targets } = useAuth();
+  const { user, profile, targets } = useAuth();
   const [day, setDay] = useState(dayKey());
   const [meals, setMeals] = useState([]);
+  const [activeEnergy, setActiveEnergy] = useState(null);
 
   useEffect(() => {
     if (!user) return undefined;
     return watchMeals(user.uid, day, setMeals);
   }, [user, day]);
 
+  useEffect(() => {
+    // Only today's burn is meaningful; scrolling back a week should not imply
+    // yesterday's activity is being counted.
+    if (!healthSupported || !isToday(day)) {
+      setActiveEnergy(null);
+      return;
+    }
+    (async () => {
+      if (await requestHealthAccess()) setActiveEnergy(await activeEnergyToday());
+    })();
+  }, [day]);
+
   const totals = sumMeals(meals);
-  const remaining = (targets.calories ?? 0) - totals.calories;
+  const bonus = activityBonus(profile, activeEnergy);
+  const budget = (targets.calories ?? 0) + bonus;
+  const remaining = budget - totals.calories;
   const overBudget = remaining < 0;
 
   function confirmDelete(meal) {
@@ -65,8 +81,16 @@ export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
             {overBudget ? 'calories over budget' : 'calories left today'}
           </Text>
           <Text style={styles.budgetDetail}>
-            {Math.round(totals.calories)} eaten of {targets.calories}
+            {Math.round(totals.calories)} eaten of {Math.round(budget)}
+            {bonus > 0 ? ` (${targets.calories} + ${bonus} earned)` : ''}
           </Text>
+
+          {activeEnergy !== null && activeEnergy > 0 ? (
+            <Text style={styles.activeEnergy}>
+              {Math.round(activeEnergy)} kcal active today
+              {bonus === 0 ? ' · not added to your budget' : ''}
+            </Text>
+          ) : null}
 
           <View style={styles.macros}>
             <MacroBar
@@ -168,6 +192,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   budgetDetail: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.sm },
+  activeEnergy: { fontSize: fonts.tiny, color: colors.accent, marginTop: spacing.xs, fontWeight: '600' },
   macros: { width: '100%', marginTop: spacing.xl },
 
   sectionHeading: {

@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { dayKey, formatDayLabel } from '../lib/dates';
 import { weeklyChange, weightTrend } from '../lib/nutrition';
+import { healthSupported, latestWeightKg, requestHealthAccess } from '../lib/health';
 import { saveWeight, watchWeights } from '../lib/store';
 import { displayLb, kgToLb, lbToKg } from '../lib/units';
 import { colors, fonts, spacing } from '../theme';
@@ -14,11 +15,19 @@ export default function WeightScreen() {
   const [entries, setEntries] = useState([]);
   const [input, setInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [healthWeight, setHealthWeight] = useState(null);
 
   useEffect(() => {
     if (!user) return undefined;
     return watchWeights(user.uid, setEntries);
   }, [user]);
+
+  useEffect(() => {
+    if (!healthSupported) return;
+    (async () => {
+      if (await requestHealthAccess()) setHealthWeight(await latestWeightKg());
+    })();
+  }, []);
 
   const trended = useMemo(() => weightTrend(entries), [entries]);
   const rate = weeklyChange(trended);
@@ -55,6 +64,20 @@ export default function WeightScreen() {
           hint="Weigh yourself at the same time each day — first thing, after the bathroom, is the most consistent."
         />
         <Button title="Log weight" onPress={log} loading={saving} disabled={!input.trim()} />
+
+        {healthWeight ? (
+          <>
+            <Text style={styles.healthNote}>
+              Apple Health has {displayLb(healthWeight.weightKg)} lb from{' '}
+              {formatDayLabel(dayKey(new Date(healthWeight.date)))}.
+            </Text>
+            <Button
+              title={`Use ${displayLb(healthWeight.weightKg)} lb from Health`}
+              variant="secondary"
+              onPress={() => setInput(displayLb(healthWeight.weightKg))}
+            />
+          </>
+        ) : null}
       </Card>
 
       {latest ? (
@@ -105,6 +128,13 @@ const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink, marginBottom: spacing.lg },
 
+  healthNote: {
+    fontSize: fonts.small,
+    color: colors.inkSoft,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    lineHeight: 20,
+  },
   trendCard: { alignItems: 'center', paddingVertical: spacing.xl },
   trendValue: { fontSize: 52, fontWeight: '800', color: colors.ink, lineHeight: 58 },
   trendLabel: {

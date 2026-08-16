@@ -183,6 +183,19 @@ export function computeTargets(profile) {
   return { ...macroSplit(calories, protein), bmr: Math.round(bmr), tdee: Math.round(tdee) };
 }
 
+/**
+ * Extra calories to allow for measured activity, if the user has opted in.
+ *
+ * Off by default, and discounted when on. Wearables overestimate active energy —
+ * often substantially — and the static activity multiplier in the profile already
+ * accounts for a normal day's movement, so adding the full figure double-counts it.
+ * Taking half is the conservative reading of a number that tends to flatter.
+ */
+export function activityBonus(profile, activeEnergyKcal) {
+  if (!profile?.useActiveEnergy || !activeEnergyKcal) return 0;
+  return Math.round(Math.max(activeEnergyKcal * 0.5, 0));
+}
+
 /** Fill the rest of the calorie budget after protein, leaning slightly to carbs. */
 function macroSplit(calories, protein) {
   const proteinKcal = protein * 4;
