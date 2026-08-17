@@ -14,7 +14,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { addDays, dayKey, formatDayLabel, guessMealType, MEAL_TYPES } from '../lib/dates';
 import { prepareImage, uriToBlob } from '../lib/image';
-import { perMealProtein, PORTION_CHOICES, resolveMeal } from '../lib/nutrition';
+import {
+  perMealProtein,
+  PORTION_CHOICES,
+  resolveMeal,
+  scaleToKnownCalories,
+} from '../lib/nutrition';
 import {
   analyzeMealPhoto,
   deleteMeal,
@@ -70,6 +75,9 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
   // Whole past meals chosen to repeat, keyed by meal id.
   const [pickedMeals, setPickedMeals] = useState(new Map());
   const [mealSearch, setMealSearch] = useState('');
+  // A calorie figure the user actually knows — from a menu or a packet — which the
+  // estimate gets rescaled to match.
+  const [knownCalories, setKnownCalories] = useState('');
 
   useEffect(() => {
     if (!user) return undefined;
@@ -149,8 +157,9 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
 
   const resolved = useMemo(() => {
     if (!analysis?.items) return null;
-    return resolveMeal(analysis.items, itemStates, analysis.questions, answers);
-  }, [analysis, itemStates, answers]);
+    const base = resolveMeal(analysis.items, itemStates, analysis.questions, answers);
+    return scaleToKnownCalories(base, Number(knownCalories) || null);
+  }, [analysis, itemStates, answers, knownCalories]);
 
   /**
    * Add photos to the meal without analysing yet, so several plates can be
@@ -433,6 +442,24 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
         </Card>
 
         {analysis.notes ? <Text style={styles.notes}>{analysis.notes}</Text> : null}
+
+        <Card>
+          <Field
+            label="Know the actual calories?"
+            placeholder="e.g. 540 from the menu"
+            value={knownCalories}
+            onChangeText={setKnownCalories}
+            keyboardType="number-pad"
+            hint="A figure from a menu or a packet beats any estimate. Everything below rescales to match it."
+          />
+          {resolved?.scaledBy ? (
+            <Text style={styles.scaledNote}>
+              Scaled to {Math.round(Number(knownCalories))} kcal —{' '}
+              {resolved.scaledBy > 1 ? 'up' : 'down'} by{' '}
+              {Math.abs(Math.round((resolved.scaledBy - 1) * 100))}% from the estimate.
+            </Text>
+          ) : null}
+        </Card>
 
         {photos.length > 0 ? (
           <Card>
@@ -879,6 +906,7 @@ const styles = StyleSheet.create({
   confidence: { fontSize: fonts.tiny, fontWeight: '600', textTransform: 'capitalize' },
   itemSource: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.xs, marginBottom: spacing.md },
   itemMacros: { fontSize: fonts.small, color: colors.inkSoft },
+  scaledNote: { fontSize: fonts.small, color: colors.primary, fontWeight: '600', lineHeight: 20 },
   itemWarning: {
     fontSize: fonts.small,
     color: colors.danger,

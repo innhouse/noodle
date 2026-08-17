@@ -112,6 +112,41 @@ export function resolveMeal(items, itemStates, questions, answers) {
   return { items: resolved, totals };
 }
 
+/**
+ * Rescale a resolved meal so its calories match a figure you actually know.
+ *
+ * A menu or a packet is ground truth and beats any estimate from a photo. Scaling
+ * everything by one factor assumes the error is spread evenly across the items,
+ * which is rarely exactly true — but the alternative is keeping a total you know to
+ * be wrong, and the macro ratios were only ever estimates anyway. The calories, at
+ * least, become right.
+ */
+export function scaleToKnownCalories(resolved, knownCalories) {
+  if (!knownCalories || !resolved?.totals?.calories) return resolved;
+  const factor = knownCalories / resolved.totals.calories;
+  if (!Number.isFinite(factor) || factor <= 0) return resolved;
+
+  const scale = (macros) => ({
+    calories: macros.calories * factor,
+    protein: macros.protein * factor,
+    carbs: macros.carbs * factor,
+    fat: macros.fat * factor,
+    fiber: (macros.fiber ?? 0) * factor,
+    sugar: (macros.sugar ?? 0) * factor,
+    sodium: (macros.sodium ?? 0) * factor,
+  });
+
+  return {
+    items: resolved.items.map((item) => ({
+      ...item,
+      resolvedGrams: item.resolvedGrams * factor,
+      macros: scale(item.macros),
+    })),
+    totals: scale(resolved.totals),
+    scaledBy: factor,
+  };
+}
+
 export function sumMeals(meals) {
   return (meals ?? []).reduce(
     (acc, meal) => addMacros(acc, meal.totals ?? EMPTY),
