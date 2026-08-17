@@ -12,7 +12,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 
 import { useAuth } from '../context/AuthContext';
-import { dayKey, guessMealType, MEAL_TYPES } from '../lib/dates';
+import { addDays, dayKey, formatDayLabel, guessMealType, MEAL_TYPES } from '../lib/dates';
 import { prepareImage, uriToBlob } from '../lib/image';
 import { perMealProtein, PORTION_CHOICES, resolveMeal } from '../lib/nutrition';
 import {
@@ -44,6 +44,9 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
   // rather than adding a second copy of the same food to the day.
   const [editingId, setEditingId] = useState(editMeal?.id ?? null);
   const [mealType, setMealType] = useState(guessMealType());
+  // Which day the meal belongs to. Defaults to today, but a meal eaten yesterday and
+  // logged this morning belongs to yesterday, not to the day you got round to it.
+  const [logDay, setLogDay] = useState(dayKey());
   const [hint, setHint] = useState('');
   // One meal can be several photos — a hotel breakfast is rarely a single plate.
   const [photos, setPhotos] = useState([]);
@@ -268,7 +271,7 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
         // log gets today's date and the current time.
         ...(editingId
           ? { id: editingId, dayKey: editMeal.dayKey, loggedAt: editMeal.loggedAt }
-          : { dayKey: dayKey(), loggedAt: new Date().toISOString() }),
+          : { dayKey: logDay, loggedAt: loggedAtFor(logDay) }),
         mealType,
         name: analysis.mealName,
         items: resolved.items.map((item) => ({
@@ -492,6 +495,16 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
           onChange={setMealType}
         />
 
+        {!editingId ? (
+          <Dropdown
+            label="Which day?"
+            value={logDay}
+            options={recentDays()}
+            onChange={setLogDay}
+            hint="Logging last night's dinner this morning? Put it on the right day."
+          />
+        ) : null}
+
         <Button
           title={editingId ? 'Save changes' : 'Log this meal'}
           onPress={save}
@@ -700,6 +713,26 @@ function gramOptions(item) {
 
 function capitalise(text) {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The last week, for putting a meal on the day it was actually eaten. */
+function recentDays() {
+  return Array.from({ length: 7 }, (_, offset) => {
+    const key = addDays(dayKey(), -offset);
+    return { label: formatDayLabel(key), value: key };
+  });
+}
+
+/**
+ * A sensible timestamp for a meal logged after the fact.
+ *
+ * Backdated meals get midday rather than the current time, so last night's dinner
+ * does not sort as though it were eaten at 9am. Today's meals keep the real clock.
+ */
+function loggedAtFor(day) {
+  if (day === dayKey()) return new Date().toISOString();
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(year, month - 1, date, 12, 0, 0).toISOString();
 }
 
 const styles = StyleSheet.create({
