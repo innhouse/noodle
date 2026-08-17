@@ -303,6 +303,111 @@ export function weightTrend(entries, alpha = 0.15) {
   });
 }
 
+/**
+ * Check logged intake against what the scale actually did.
+ *
+ * This is the only measurement in the app that can audit the others. Every calorie
+ * figure Noodle produces is an estimate stacked on an estimate — a portion guessed
+ * from a photo, a database row that may not match what was on the plate, a BMR
+ * equation fitted to a population. Weight change is a real measurement, and over
+ * enough days it reveals the net error in all of it.
+ *
+ * The gap does not say who is wrong. Under-logged intake and an overestimated burn
+ * look identical from here, and both are common. What it does give is a target
+ * corrected by observation rather than by equation, which is the number worth eating
+ * to.
+ *
+ * Returns null unless there is enough data to mean anything — a fortnight of
+ * weigh-ins and ten properly logged days. Guessing from less would be exactly the
+ * false precision this is meant to catch.
+ */
+export function calibrate({ meals, weights, targets, profile }) {
+  if (!targets?.calories || !profile) return null;
+
+  // Least squares over the raw readings, not the smoothed trend. Exponential
+  // smoothing lags by design — it is the right tool for showing today's number
+  // without scale noise, but it systematically understates the rate of change, and
+  // here that would flow straight into a calorie target that is too generous.
+  const observedRate = regressionRate(weights);
+  if (observedRate === null) return null;
+
+  // Only days with at least two meals: a day with one lunch logged is a day someone
+  // stopped logging, not a 400-calorie day, and averaging those in would invent a
+  // deficit that never happened.
+  const byDay = new Map();
+  for (const meal of meals ?? []) {
+    const day = byDay.get(meal.dayKey) ?? { calories: 0, count: 0 };
+    day.calories += meal.totals?.calories ?? 0;
+    day.count += 1;
+    byDay.set(meal.dayKey, day);
+  }
+  const complete = [...byDay.values()].filter((day) => day.count >= 2);
+  if (complete.length < 10) return null;
+
+  const loggedIntake = complete.reduce((sum, day) => sum + day.calories, 0) / complete.length;
+
+  // What the scale says the deficit really was, in kcal/day.
+  const observedDeficit = (-observedRate * KCAL_PER_KG) / 7;
+  // Therefore what the body must actually be burning, given what was logged.
+  const impliedBurn = loggedIntake + observedDeficit;
+
+  // Negative means losing, matching the observed rate. Keeping both on the same
+  // convention matters: with one positive-for-loss and the other negative, the gap
+  // came out as their sum and roughly doubled.
+  const tdee = computeTargets(profile).tdee;
+  const predictedRate = tdee ? ((loggedIntake - tdee) * 7) / KCAL_PER_KG : null;
+
+  // The target that would actually produce the goal rate, using measured burn
+  // instead of the equation.
+  const goalDeficit = ((profile.lossRate ?? 0.4536) * KCAL_PER_KG) / 7;
+  const suggestedTarget = Math.round(impliedBurn - goalDeficit);
+
+  return {
+    days: complete.length,
+    loggedIntake: Math.round(loggedIntake),
+    observedRate,
+    predictedRate,
+    impliedBurn: Math.round(impliedBurn),
+    suggestedTarget,
+    // Positive means losing more slowly than the logged numbers predict — the usual
+    // direction, and the one that means intake is understated.
+    gap:
+      predictedRate === null
+        ? null
+        : Math.round(((observedRate - predictedRate) * KCAL_PER_KG) / 7),
+  };
+}
+
+/**
+ * Rate of weight change in kg/week, by least-squares fit over the raw readings.
+ *
+ * Unbiased where the exponentially weighted trend lags, which matters when the
+ * number feeds a calorie target rather than just a display. Needs a fortnight —
+ * over less, daily water swings dominate the slope entirely.
+ */
+export function regressionRate(entries) {
+  const points = [...(entries ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  if (points.length < 8) return null;
+
+  const origin = new Date(points[0].date).getTime();
+  const days = points.map((entry) => (new Date(entry.date).getTime() - origin) / 86_400_000);
+  if (days[days.length - 1] < 14) return null;
+
+  const n = points.length;
+  const meanDay = days.reduce((a, b) => a + b, 0) / n;
+  const meanWeight = points.reduce((sum, entry) => sum + entry.weightKg, 0) / n;
+
+  let numerator = 0;
+  let denominator = 0;
+  for (let i = 0; i < n; i += 1) {
+    numerator += (days[i] - meanDay) * (points[i].weightKg - meanWeight);
+    denominator += (days[i] - meanDay) ** 2;
+  }
+  if (denominator === 0) return null;
+
+  return (numerator / denominator) * 7;
+}
+
 /** Observed kg/week over the trend line, or null when there isn't enough data yet. */
 export function weeklyChange(trended) {
   if (!trended || trended.length < 8) return null;

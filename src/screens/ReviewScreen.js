@@ -3,8 +3,9 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 
 import { useAuth } from '../context/AuthContext';
 import { addDays, dayKey } from '../lib/dates';
-import { mealQuality, qualityLabel } from '../lib/nutrition';
-import { reviewMeals, watchRecentMeals } from '../lib/store';
+import { calibrate, mealQuality, qualityLabel } from '../lib/nutrition';
+import { kgToLb } from '../lib/units';
+import { reviewMeals, watchRecentMeals, watchWeights } from '../lib/store';
 import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Empty, Pill } from '../ui';
 
@@ -13,8 +14,9 @@ import { Button, Card, Empty, Pill } from '../ui';
  * which quietly cost a lot for nothing, across enough days for a pattern to appear.
  */
 export default function ReviewScreen() {
-  const { user, targets } = useAuth();
+  const { user, profile, targets } = useAuth();
   const [meals, setMeals] = useState([]);
+  const [weights, setWeights] = useState([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,6 +25,18 @@ export default function ReviewScreen() {
     if (!user) return undefined;
     return watchRecentMeals(user.uid, setMeals, 200);
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    return watchWeights(user.uid, setWeights);
+  }, [user]);
+
+  // Deliberately over all logged meals, not just the last week — the signal only
+  // separates from scale noise over a few weeks.
+  const check = useMemo(
+    () => calibrate({ meals, weights, targets, profile }),
+    [meals, weights, targets, profile]
+  );
 
   const since = addDays(dayKey(), -7);
   const recent = useMemo(
@@ -112,6 +126,50 @@ export default function ReviewScreen() {
         <Text style={styles.hint}>Log at least three meals for this to say anything useful.</Text>
       ) : null}
 
+      {check ? (
+        <Card style={styles.calibration}>
+          <Text style={styles.calibrationTitle}>Reality check</Text>
+          <Text style={styles.calibrationBody}>
+            Over {check.days} properly logged days you averaged{' '}
+            <Text style={styles.bold}>{check.loggedIntake} kcal</Text>, and the scale moved{' '}
+            <Text style={styles.bold}>
+              {Math.abs(kgToLb(check.observedRate)).toFixed(1)} lb
+              {check.observedRate < 0 ? ' down' : ' up'} a week
+            </Text>
+            .
+          </Text>
+
+          {check.gap !== null && Math.abs(check.gap) >= 150 ? (
+            <Text style={styles.calibrationBody}>
+              {'\n'}That's about{' '}
+              <Text style={styles.bold}>{Math.abs(check.gap)} kcal a day</Text>{' '}
+              {check.gap > 0 ? 'less progress' : 'more progress'} than your logged numbers
+              predict. Either you're eating {check.gap > 0 ? 'more' : 'less'} than the log says,
+              or you burn {check.gap > 0 ? 'less' : 'more'} than the equation assumes. The
+              measurement can't tell which, and both are common.
+            </Text>
+          ) : (
+            <Text style={styles.calibrationBody}>
+              {'\n'}That matches what your logged intake predicts, so your estimates are
+              holding up well.
+            </Text>
+          )}
+
+          <Text style={styles.calibrationBody}>
+            {'\n'}Working backwards from the scale, you're burning around{' '}
+            <Text style={styles.bold}>{check.impliedBurn} kcal</Text> a day. To hit your goal
+            rate, target{' '}
+            <Text style={styles.bold}>{check.suggestedTarget} kcal</Text> — that figure comes
+            from your own results rather than a formula.
+          </Text>
+
+          <Text style={styles.calibrationFooter}>
+            Currently targeting {targets.calories}. Change it under Settings → Override the
+            numbers if you want to follow this.
+          </Text>
+        </Card>
+      ) : null}
+
       <Card style={styles.explainer}>
         <Text style={styles.explainerTitle}>What the number means</Text>
         <Text style={styles.explainerBody}>
@@ -193,6 +251,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: spacing.md,
   },
+
+  calibration: { backgroundColor: colors.accentSoft, borderColor: colors.accent, marginTop: spacing.xl },
+  calibrationTitle: { fontSize: fonts.big, fontWeight: '800', color: colors.ink, marginBottom: spacing.sm },
+  calibrationBody: { fontSize: fonts.small, color: colors.ink, lineHeight: 21 },
+  calibrationFooter: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.md, lineHeight: 18 },
 
   explainer: { backgroundColor: colors.primarySoft, borderColor: colors.primary, marginTop: spacing.xl },
   explainerTitle: { fontSize: fonts.body, fontWeight: '700', color: colors.ink, marginBottom: spacing.sm },
