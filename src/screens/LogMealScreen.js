@@ -67,6 +67,9 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
   // photo could not carry.
   const [correction, setCorrection] = useState('');
   const [reanalyzing, setReanalyzing] = useState(false);
+  // Individual foods chosen from history, keyed by lowercased label.
+  const [picked, setPicked] = useState(new Map());
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (!user) return undefined;
@@ -83,8 +86,68 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
       if (!key || seen.has(key)) continue;
       seen.set(key, meal);
     }
-    return [...seen.values()].slice(0, 8);
+    return [...seen.values()].slice(0, 12);
   }, [recent]);
+
+  /**
+   * Every distinct food ever logged, newest first.
+   *
+   * Whole meals rarely repeat exactly — the same eggs turn up with toast one day and
+   * fruit the next — so the useful unit to reuse is the item, not the sitting. This
+   * also stops older meals falling off the list: a breakfast from last week is gone
+   * from the meal list but its eggs are still here.
+   */
+  const pantry = useMemo(() => {
+    const seen = new Map();
+    for (const meal of recent) {
+      for (const item of meal.items ?? []) {
+        const key = item.label?.toLowerCase().trim();
+        if (!key || seen.has(key)) continue;
+        seen.set(key, item);
+      }
+    }
+    const all = [...seen.values()];
+    const needle = search.trim().toLowerCase();
+    return needle
+      ? all.filter((item) => item.label.toLowerCase().includes(needle))
+      : all.slice(0, 30);
+  }, [recent, search]);
+
+  function toggleItem(item) {
+    setPicked((previous) => {
+      const key = item.label.toLowerCase();
+      const next = new Map(previous);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, item);
+      return next;
+    });
+  }
+
+  /** Turn the chosen items into a meal, ready for the usual portion controls. */
+  function buildFromPicked() {
+    const items = [...picked.values()].map((item, index) => ({
+      ...item,
+      // Ids have to be unique within the new meal; the originals came from
+      // different meals and would collide.
+      id: `item-${index}`,
+    }));
+
+    setEditingId(null);
+    setAnalysis({
+      isFood: true,
+      mealName: items.map((item) => item.label).join(', '),
+      items,
+      questions: [],
+      notes: '',
+    });
+    setItemStates(
+      Object.fromEntries(items.map((item) => [item.id, { portion: 1, grams: item.grams }]))
+    );
+    setAnswers({});
+    setPicked(new Map());
+    setPhotos([]);
+    setPhase('confirm');
+  }
 
   const proteinTarget = perMealProtein(targets, mealType);
 
@@ -588,9 +651,56 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
         </>
       ) : null}
 
+      {recent.length > 0 ? (
+        <>
+          <Text style={styles.sectionHeading}>Pick foods you've had before</Text>
+          <Text style={styles.sectionSub}>
+            Tap as many as you like, then add them as one meal. No photo, no waiting.
+          </Text>
+
+          <Field
+            placeholder="Search your foods…"
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+          />
+
+          {pantry.length === 0 ? (
+            <Text style={styles.sectionSub}>Nothing matches "{search}".</Text>
+          ) : (
+            pantry.map((item) => {
+              const isPicked = picked.has(item.label.toLowerCase());
+              return (
+                <Pressable key={item.label} onPress={() => toggleItem(item)}>
+                  <Card style={[styles.pantryRow, isPicked && styles.pantryRowPicked]}>
+                    <Text style={styles.pantryCheck}>{isPicked ? '☑' : '☐'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pantryLabel} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                      <Text style={styles.pantryMeta}>
+                        {item.grams} g · {Math.round(item.macros?.calories ?? 0)} kcal ·{' '}
+                        {Math.round(item.macros?.protein ?? 0)} g protein
+                      </Text>
+                    </View>
+                  </Card>
+                </Pressable>
+              );
+            })
+          )}
+
+          {picked.size > 0 ? (
+            <Button
+              title={`Add ${picked.size} item${picked.size === 1 ? '' : 's'} as a meal`}
+              onPress={buildFromPicked}
+            />
+          ) : null}
+        </>
+      ) : null}
+
       {repeatable.length > 0 ? (
         <>
-          <Text style={styles.sectionHeading}>Log it again</Text>
+          <Text style={styles.sectionHeading}>Or repeat a whole meal</Text>
           <Text style={styles.sectionSub}>
             Something you've eaten before, with no photo and no waiting.
           </Text>
@@ -831,6 +941,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   thumbRemoveText: { color: '#FFFFFF', fontSize: fonts.small, fontWeight: '700', lineHeight: 18 },
+
+  pantryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  pantryRowPicked: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  pantryCheck: { fontSize: fonts.big, color: colors.primary },
+  pantryLabel: { fontSize: fonts.body, color: colors.ink, fontWeight: '600' },
+  pantryMeta: { fontSize: fonts.small, color: colors.inkSoft, marginTop: 2 },
 
   repeatCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   repeatPhoto: { width: 48, height: 48, borderRadius: radius - 6 },
