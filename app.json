@@ -47,13 +47,6 @@
           "photosPermission": "Noodle needs access to your photos so you can log a meal from a picture you already took.",
           "cameraPermission": "Noodle uses the camera so you can photograph a meal and have it logged automatically."
         }
-      ],
-      [
-        "@kingstinct/react-native-healthkit",
-        {
-          "NSHealthShareUsageDescription": "Noodle reads your weight and the calories you've burned so your targets reflect what's actually happening, instead of a guess.",
-          "NSHealthUpdateUsageDescription": "Noodle does not write anything to Health."
-        }
       ]
     ],
     "extra": {
