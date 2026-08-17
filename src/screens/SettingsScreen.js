@@ -3,7 +3,12 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { healthSupported } from '../lib/health';
-import { ACTIVITY_LEVELS, computeTargets, LOSS_RATES } from '../lib/nutrition';
+import {
+  ACTIVE_ENERGY_SHARES,
+  ACTIVITY_LEVELS,
+  computeTargets,
+  LOSS_RATES,
+} from '../lib/nutrition';
 import {
   cmToFeetInches,
   displayLb,
@@ -61,6 +66,7 @@ export default function SettingsScreen() {
       lossRate: draft.lossRate ?? 0.4536,
       manualCalories: Number(draft.manualCalories) || null,
       manualProtein: Number(draft.manualProtein) || null,
+      activeEnergyShare: draft.activeEnergyShare ?? (draft.useActiveEnergy ? 0.5 : 0),
       useActiveEnergy: Boolean(draft.useActiveEnergy),
     });
     setSaved(true);
@@ -173,14 +179,11 @@ export default function SettingsScreen() {
         <Card>
           <Text style={styles.cardTitle}>Apple Health</Text>
           <Dropdown
-            label="Count activity towards your budget?"
-            value={draft.useActiveEnergy ? 'yes' : 'no'}
-            options={[
-              { label: 'No — just show me the number', value: 'no', hint: 'Recommended' },
-              { label: 'Yes — add it to my budget', value: 'yes' },
-            ]}
-            onChange={(value) => set({ useActiveEnergy: value === 'yes' })}
-            hint="Trackers overestimate calories burned, often by a lot, and your activity level above already assumes a normal day's movement. When this is on, Noodle adds only half of what Health reports."
+            label="How much of your activity counts towards your budget?"
+            value={draft.activeEnergyShare ?? (draft.useActiveEnergy ? 0.5 : 0)}
+            options={ACTIVE_ENERGY_SHARES}
+            onChange={(activeEnergyShare) => set({ activeEnergyShare })}
+            hint="Health reports active energy only — your resting burn is already in the target, so never add the larger total figure. Phone-only estimates run high; a watch is more trustworthy."
           />
         </Card>
       ) : null}

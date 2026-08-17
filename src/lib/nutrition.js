@@ -245,9 +245,35 @@ export function perMealProtein(targets, mealType) {
  * Taking half is the conservative reading of a number that tends to flatter.
  */
 export function activityBonus(profile, activeEnergyKcal) {
-  if (!profile?.useActiveEnergy || !activeEnergyKcal) return 0;
-  return Math.round(Math.max(activeEnergyKcal * 0.5, 0));
+  if (!activeEnergyKcal) return 0;
+  // Stored as a fraction so the discount is the user's decision rather than a
+  // constant buried in here. Legacy profiles used a boolean meaning "half".
+  const share = profile?.activeEnergyShare ?? (profile?.useActiveEnergy ? 0.5 : 0);
+  return Math.round(Math.max(activeEnergyKcal * share, 0));
 }
+
+export const ACTIVE_ENERGY_SHARES = [
+  {
+    label: "Don't count it",
+    value: 0,
+    hint: 'Show the number, leave the budget alone',
+  },
+  {
+    label: 'Count half',
+    value: 0.5,
+    hint: 'Cautious — good if the figure comes from your phone rather than a watch',
+  },
+  {
+    label: 'Count three quarters',
+    value: 0.75,
+    hint: 'Middle ground',
+  },
+  {
+    label: 'Count all of it',
+    value: 1,
+    hint: 'Trust the tracker — reasonable with an Apple Watch',
+  },
+];
 
 /** Fill the rest of the calorie budget after protein, leaning slightly to carbs. */
 function macroSplit(calories, protein) {
