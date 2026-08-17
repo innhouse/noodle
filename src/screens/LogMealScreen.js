@@ -69,14 +69,20 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
   const [reanalyzing, setReanalyzing] = useState(false);
   // Whole past meals chosen to repeat, keyed by meal id.
   const [pickedMeals, setPickedMeals] = useState(new Map());
+  const [mealSearch, setMealSearch] = useState('');
 
   useEffect(() => {
     if (!user) return undefined;
     return watchRecentMeals(user.uid, setRecent, 60);
   }, [user]);
 
-  // One entry per distinct meal, most recent first. Eating the same breakfast all
-  // week should offer one row, not seven identical ones.
+  /**
+   * One entry per distinct meal, most recent first.
+   *
+   * Eating the same breakfast all week should offer one row, not seven identical
+   * ones. The list is capped for length, so searching widens it to everything —
+   * otherwise a meal from a few days ago simply vanishes with no way to reach it.
+   */
   const repeatable = useMemo(() => {
     const seen = new Map();
     for (const meal of recent) {
@@ -85,8 +91,18 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
       if (!key || seen.has(key)) continue;
       seen.set(key, meal);
     }
-    return [...seen.values()].slice(0, 12);
-  }, [recent]);
+    const all = [...seen.values()];
+    const needle = mealSearch.trim().toLowerCase();
+    if (!needle) return all.slice(0, 20);
+
+    // Match the meal's name or any food inside it, so "fruit" finds a breakfast
+    // whose name never mentions it.
+    return all.filter(
+      (meal) =>
+        meal.name?.toLowerCase().includes(needle) ||
+        (meal.items ?? []).some((item) => item.label?.toLowerCase().includes(needle))
+    );
+  }, [recent, mealSearch]);
 
   function toggleMeal(meal) {
     setPickedMeals((previous) => {
@@ -625,13 +641,24 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
         </>
       ) : null}
 
-      {repeatable.length > 0 ? (
+      {recent.length > 0 ? (
         <>
           <Text style={styles.sectionHeading}>Meals you've had before</Text>
           <Text style={styles.sectionSub}>
             Tick as many as you like — they combine into a single {mealType}. No photo, no
             waiting.
           </Text>
+
+          <Field
+            placeholder="Search meals and foods…"
+            value={mealSearch}
+            onChangeText={setMealSearch}
+            autoCapitalize="none"
+          />
+          {repeatable.length === 0 ? (
+            <Text style={styles.sectionSub}>Nothing matches that.</Text>
+          ) : null}
+
           {repeatable.map((meal) => {
             const isPicked = pickedMeals.has(meal.id);
             return (
