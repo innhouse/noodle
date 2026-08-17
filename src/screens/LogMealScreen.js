@@ -67,9 +67,8 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
   // photo could not carry.
   const [correction, setCorrection] = useState('');
   const [reanalyzing, setReanalyzing] = useState(false);
-  // Individual foods chosen from history, keyed by lowercased label.
-  const [picked, setPicked] = useState(new Map());
-  const [search, setSearch] = useState('');
+  // Whole past meals chosen to repeat, keyed by meal id.
+  const [pickedMeals, setPickedMeals] = useState(new Map());
 
   useEffect(() => {
     if (!user) return undefined;
@@ -89,43 +88,24 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
     return [...seen.values()].slice(0, 12);
   }, [recent]);
 
-  /**
-   * Every distinct food ever logged, newest first.
-   *
-   * Whole meals rarely repeat exactly — the same eggs turn up with toast one day and
-   * fruit the next — so the useful unit to reuse is the item, not the sitting. This
-   * also stops older meals falling off the list: a breakfast from last week is gone
-   * from the meal list but its eggs are still here.
-   */
-  const pantry = useMemo(() => {
-    const seen = new Map();
-    for (const meal of recent) {
-      for (const item of meal.items ?? []) {
-        const key = item.label?.toLowerCase().trim();
-        if (!key || seen.has(key)) continue;
-        seen.set(key, item);
-      }
-    }
-    const all = [...seen.values()];
-    const needle = search.trim().toLowerCase();
-    return needle
-      ? all.filter((item) => item.label.toLowerCase().includes(needle))
-      : all.slice(0, 30);
-  }, [recent, search]);
-
-  function toggleItem(item) {
-    setPicked((previous) => {
-      const key = item.label.toLowerCase();
+  function toggleMeal(meal) {
+    setPickedMeals((previous) => {
       const next = new Map(previous);
-      if (next.has(key)) next.delete(key);
-      else next.set(key, item);
+      if (next.has(meal.id)) next.delete(meal.id);
+      else next.set(meal.id, meal);
       return next;
     });
   }
 
-  /** Turn the chosen items into a meal, ready for the usual portion controls. */
+  /**
+   * Turn everything chosen — whole meals and loose foods — into one new meal.
+   *
+   * Meals contribute all their items, so picking yesterday's breakfast and a coffee
+   * gives one entry containing both, rather than forcing two separate logs.
+   */
   function buildFromPicked() {
-    const items = [...picked.values()].map((item, index) => ({
+    const fromMeals = [...pickedMeals.values()].flatMap((meal) => meal.items ?? []);
+    const items = [...fromMeals].map((item, index) => ({
       ...item,
       // Ids have to be unique within the new meal; the originals came from
       // different meals and would collide.
@@ -144,7 +124,7 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
       Object.fromEntries(items.map((item) => [item.id, { portion: 1, grams: item.grams }]))
     );
     setAnswers({});
-    setPicked(new Map());
+    setPickedMeals(new Map());
     setPhotos([]);
     setPhase('confirm');
   }
@@ -299,12 +279,6 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
     setMealType(meal.mealType ?? guessMealType());
     setPhotos([]);
     setPhase('confirm');
-  }
-
-  function relog(meal) {
-    // A repeat is a new meal today, not an edit of the old one.
-    setEditingId(null);
-    loadSavedMeal(meal);
   }
 
   useEffect(() => {
@@ -651,82 +625,43 @@ export default function LogMealScreen({ onDone, onCancel, editMeal }) {
         </>
       ) : null}
 
-      {recent.length > 0 ? (
+      {repeatable.length > 0 ? (
         <>
-          <Text style={styles.sectionHeading}>Pick foods you've had before</Text>
+          <Text style={styles.sectionHeading}>Meals you've had before</Text>
           <Text style={styles.sectionSub}>
-            Tap as many as you like, then add them as one meal. No photo, no waiting.
+            Tick as many as you like — they combine into a single {mealType}. No photo, no
+            waiting.
           </Text>
+          {repeatable.map((meal) => {
+            const isPicked = pickedMeals.has(meal.id);
+            return (
+              <Pressable key={meal.id} onPress={() => toggleMeal(meal)}>
+                <Card style={[styles.pantryRow, isPicked && styles.pantryRowPicked]}>
+                  <Text style={styles.pantryCheck}>{isPicked ? '☑' : '☐'}</Text>
+                  {meal.photoUrl ? (
+                    <Image source={{ uri: meal.photoUrl }} style={styles.repeatPhoto} />
+                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pantryLabel} numberOfLines={1}>
+                      {meal.name}
+                    </Text>
+                    <Text style={styles.pantryMeta}>
+                      {Math.round(meal.totals?.calories ?? 0)} kcal ·{' '}
+                      {Math.round(meal.totals?.protein ?? 0)} g protein ·{' '}
+                      {formatDayLabel(meal.dayKey)}
+                    </Text>
+                  </View>
+                </Card>
+              </Pressable>
+            );
+          })}
 
-          <Field
-            placeholder="Search your foods…"
-            value={search}
-            onChangeText={setSearch}
-            autoCapitalize="none"
-          />
-
-          {pantry.length === 0 ? (
-            <Text style={styles.sectionSub}>Nothing matches "{search}".</Text>
-          ) : (
-            pantry.map((item) => {
-              const isPicked = picked.has(item.label.toLowerCase());
-              return (
-                <Pressable key={item.label} onPress={() => toggleItem(item)}>
-                  <Card style={[styles.pantryRow, isPicked && styles.pantryRowPicked]}>
-                    <Text style={styles.pantryCheck}>{isPicked ? '☑' : '☐'}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.pantryLabel} numberOfLines={1}>
-                        {item.label}
-                      </Text>
-                      <Text style={styles.pantryMeta}>
-                        {item.grams} g · {Math.round(item.macros?.calories ?? 0)} kcal ·{' '}
-                        {Math.round(item.macros?.protein ?? 0)} g protein
-                      </Text>
-                    </View>
-                  </Card>
-                </Pressable>
-              );
-            })
-          )}
-
-          {picked.size > 0 ? (
+          {pickedMeals.size > 0 ? (
             <Button
-              title={`Add ${picked.size} item${picked.size === 1 ? '' : 's'} as a meal`}
+              title={`Add ${pickedMeals.size} as ${mealType}`}
               onPress={buildFromPicked}
             />
           ) : null}
-        </>
-      ) : null}
-
-      {repeatable.length > 0 ? (
-        <>
-          <Text style={styles.sectionHeading}>Or repeat a whole meal</Text>
-          <Text style={styles.sectionSub}>
-            Something you've eaten before, with no photo and no waiting.
-          </Text>
-          {repeatable.map((meal) => (
-            <Pressable key={meal.id} onPress={() => relog(meal)}>
-              <Card style={styles.repeatCard}>
-                {meal.photoUrl ? (
-                  <Image source={{ uri: meal.photoUrl }} style={styles.repeatPhoto} />
-                ) : (
-                  <View style={[styles.repeatPhoto, styles.repeatPhotoEmpty]}>
-                    <Text style={styles.repeatPhotoEmptyText}>🍽</Text>
-                  </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.repeatName} numberOfLines={1}>
-                    {meal.name}
-                  </Text>
-                  <Text style={styles.repeatMeta}>
-                    {Math.round(meal.totals?.calories ?? 0)} kcal ·{' '}
-                    {Math.round(meal.totals?.protein ?? 0)} g protein
-                  </Text>
-                </View>
-                <Text style={styles.repeatChevron}>›</Text>
-              </Card>
-            </Pressable>
-          ))}
         </>
       ) : null}
 
