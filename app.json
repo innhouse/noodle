@@ -31,10 +31,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#3F7D58"
       },
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES"
-      ]
+      "permissions": ["android.permission.CAMERA", "android.permission.READ_MEDIA_IMAGES"]
     },
     "web": {
       "bundler": "metro",
@@ -60,6 +57,12 @@
       "eas": {
         "projectId": "f5752ca7-95d5-4935-94e1-c7afc2f67842"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f5752ca7-95d5-4935-94e1-c7afc2f67842"
     }
   }
 }
