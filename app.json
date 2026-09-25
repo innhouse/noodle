@@ -48,7 +48,7 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Noodle reads your weight and the calories you've burned so your targets reflect what's actually happening, instead of a guess.",
+          "NSHealthShareUsageDescription": "Noodle reads your weight, the calories you've burned, and your heart metrics — resting heart rate, HRV, cardio fitness, blood pressure and blood oxygen — so it can show them alongside what you have eaten. It only reads; it never writes to Health.",
           "NSHealthUpdateUsageDescription": "Noodle does not write anything to Health."
         }
       ]
