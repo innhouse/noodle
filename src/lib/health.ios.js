@@ -11,102 +11,30 @@
  */
 import {
   isHealthDataAvailableAsync,
+  queryCategorySamples,
   queryQuantitySamples,
   queryStatisticsForQuantity,
   requestAuthorization,
 } from '@kingstinct/react-native-healthkit';
 
+import { HEALTH_METRICS } from './healthMetrics';
+
+export { HEALTH_METRICS, METRIC_GROUPS } from './healthMetrics';
+
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass';
 const ACTIVE_ENERGY = 'HKQuantityTypeIdentifierActiveEnergyBurned';
+const SLEEP_ANALYSIS = 'HKCategoryTypeIdentifierSleepAnalysis';
 
-/**
- * Heart metrics, with the unit HealthKit expects for each.
- *
- * Units are not interchangeable — asking for a rate in 'count/s' returns a number
- * sixty times smaller with no error, which would look like a resting pulse of one.
- * `daily` marks the metrics Apple already stores once per day; the rest are sampled
- * continuously and get averaged per day before display.
- */
-export const HEART_METRICS = {
-  restingHeartRate: {
-    id: 'HKQuantityTypeIdentifierRestingHeartRate',
-    unit: 'count/min',
-    label: 'Resting heart rate',
-    short: 'bpm',
-    daily: true,
-    // Lower is generally fitter, so an improving trend goes down.
-    betterWhen: 'lower',
-  },
-  hrv: {
-    id: 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
-    unit: 'ms',
-    label: 'Heart rate variability',
-    short: 'ms',
-    daily: false,
-    betterWhen: 'higher',
-  },
-  vo2Max: {
-    id: 'HKQuantityTypeIdentifierVO2Max',
-    unit: 'ml/(kg*min)',
-    label: 'Cardio fitness (VO₂ max)',
-    short: 'ml/kg/min',
-    daily: false,
-    betterWhen: 'higher',
-  },
-  walkingHeartRate: {
-    id: 'HKQuantityTypeIdentifierWalkingHeartRateAverage',
-    unit: 'count/min',
-    label: 'Walking heart rate',
-    short: 'bpm',
-    daily: true,
-    betterWhen: 'lower',
-  },
-  heartRateRecovery: {
-    id: 'HKQuantityTypeIdentifierHeartRateRecoveryOneMinute',
-    unit: 'count/min',
-    label: 'Heart rate recovery',
-    short: 'bpm drop',
-    daily: false,
-    betterWhen: 'higher',
-  },
-  respiratoryRate: {
-    id: 'HKQuantityTypeIdentifierRespiratoryRate',
-    unit: 'count/min',
-    label: 'Respiratory rate',
-    short: 'breaths/min',
-    daily: false,
-    betterWhen: null,
-  },
-  oxygenSaturation: {
-    id: 'HKQuantityTypeIdentifierOxygenSaturation',
-    unit: '%',
-    label: 'Blood oxygen',
-    short: '%',
-    daily: false,
-    betterWhen: 'higher',
-  },
-  systolic: {
-    id: 'HKQuantityTypeIdentifierBloodPressureSystolic',
-    unit: 'mmHg',
-    label: 'Blood pressure (systolic)',
-    short: 'mmHg',
-    daily: false,
-    betterWhen: null,
-  },
-  diastolic: {
-    id: 'HKQuantityTypeIdentifierBloodPressureDiastolic',
-    unit: 'mmHg',
-    label: 'Blood pressure (diastolic)',
-    short: 'mmHg',
-    daily: false,
-    betterWhen: null,
-  },
-};
+// HKCategoryValueSleepAnalysis. inBed (0) and awake (2) are not sleep — counting
+// them would turn a restless night into a long one.
+const ASLEEP_VALUES = new Set([1, 3, 4, 5]);
+const SLEEP_STAGES = { 3: 'core', 4: 'deep', 5: 'rem' };
 
 const READ_TYPES = [
   BODY_MASS,
   ACTIVE_ENERGY,
-  ...Object.values(HEART_METRICS).map((metric) => metric.id),
+  SLEEP_ANALYSIS,
+  ...Object.values(HEALTH_METRICS).map((metric) => metric.id),
 ];
 
 export const healthSupported = true;
@@ -176,24 +104,27 @@ function localDayKey(date) {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
-/**
- * One value per day for a metric, over the last `days` days.
- *
- * Continuously sampled metrics like HRV produce many readings a day, so they are
- * averaged per day. Averaging is the honest reduction here: a max would be picking
- * whichever reading happened during a stressful moment, and a last-of-day would be
- * whenever the watch last felt like measuring.
- */
-async function dailySeries(metric, days) {
+function windowStart(days) {
   const start = new Date();
   start.setDate(start.getDate() - days);
   start.setHours(0, 0, 0, 0);
+  return start;
+}
 
+/**
+ * One value per day for a metric, over the last `days` days.
+ *
+ * Samples are summed or averaged according to the metric, because the two are not
+ * interchangeable: a day's steps arrive as dozens of partial counts that have to be
+ * added, while a day's heart rates have to be averaged. Getting this backwards
+ * produces numbers that look reasonable and are not.
+ */
+async function dailySeries(metric, days) {
   const samples = await queryQuantitySamples(metric.id, {
-    limit: 0, // all samples in range
+    limit: 0, // every sample in range
     ascending: true,
     unit: metric.unit,
-    filter: { date: { startDate: start, endDate: new Date() } },
+    filter: { date: { startDate: windowStart(days), endDate: new Date() } },
   });
 
   const byDay = new Map();
@@ -206,21 +137,64 @@ async function dailySeries(metric, days) {
     byDay.set(key, bucket);
   }
 
+  const convert = metric.convert ?? ((value) => value);
   return [...byDay.entries()]
-    .map(([date, bucket]) => ({ date, value: bucket.sum / bucket.count }))
+    .map(([date, bucket]) => ({
+      date,
+      value: convert(metric.aggregate === 'sum' ? bucket.sum : bucket.sum / bucket.count),
+    }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /**
- * Every heart metric at once, as daily series.
+ * Sleep per night, in hours, with the stage breakdown where the watch recorded one.
  *
- * Each metric is fetched independently and a failure on one returns an empty series
- * rather than rejecting the lot — a watch that has never recorded VO₂ max should not
- * stop the resting heart rate showing.
+ * A night is filed under the day you woke up, not the evening you went to bed, since
+ * that is the day it affects — you eat breakfast tired, not the night before.
+ *
+ * Only genuine sleep counts. HealthKit also logs "in bed" and "awake" segments, and
+ * including them would turn a broken night into a long one.
  */
-export async function heartSeries(days = 90) {
+async function sleepSeries(days) {
+  const samples = await queryCategorySamples(SLEEP_ANALYSIS, {
+    limit: 0,
+    ascending: true,
+    filter: { date: { startDate: windowStart(days), endDate: new Date() } },
+  });
+
+  const byNight = new Map();
+  for (const sample of samples ?? []) {
+    if (!ASLEEP_VALUES.has(sample.value)) continue;
+
+    const start = new Date(sample.startDate).getTime();
+    const end = new Date(sample.endDate).getTime();
+    const hours = (end - start) / 3_600_000;
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+
+    const key = localDayKey(sample.endDate);
+    const night = byNight.get(key) ?? { total: 0, core: 0, deep: 0, rem: 0 };
+    night.total += hours;
+    const stage = SLEEP_STAGES[sample.value];
+    if (stage) night[stage] += hours;
+    byNight.set(key, night);
+  }
+
+  return [...byNight.entries()]
+    .map(([date, night]) => ({ date, value: night.total, stages: night }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Every metric at once, as daily series.
+ *
+ * Each is fetched independently and a failure returns an empty series rather than
+ * rejecting the lot — a watch that has never recorded VO₂ max should not stop the
+ * resting heart rate showing. The screen renders only what came back with data, so
+ * this stays correct as hardware gains and loses sensors.
+ */
+export async function healthSeries(days = 90) {
   const entries = await Promise.all(
-    Object.entries(HEART_METRICS).map(async ([key, metric]) => {
+    Object.entries(HEALTH_METRICS).map(async ([key, metric]) => {
       try {
         return [key, await dailySeries(metric, days)];
       } catch (error) {
@@ -229,5 +203,13 @@ export async function heartSeries(days = 90) {
       }
     })
   );
-  return Object.fromEntries(entries);
+
+  let sleep = [];
+  try {
+    sleep = await sleepSeries(days);
+  } catch (error) {
+    console.warn('health sleep read failed', error);
+  }
+
+  return { ...Object.fromEntries(entries), sleep };
 }

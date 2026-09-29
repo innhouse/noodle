@@ -14,7 +14,7 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { firebaseReady } from './src/lib/firebase';
 import CoachScreen from './src/screens/CoachScreen';
-import HeartScreen from './src/screens/HeartScreen';
+import HealthScreen from './src/screens/HealthScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import LogMealScreen from './src/screens/LogMealScreen';
 import ReviewScreen from './src/screens/ReviewScreen';
@@ -29,7 +29,7 @@ const TABS = [
   { key: 'review', label: 'Review', icon: '🔍' },
   { key: 'history', label: 'History', icon: '📈' },
   { key: 'weight', label: 'Weight', icon: '⚖️' },
-  { key: 'heart', label: 'Heart', icon: '❤️' },
+  { key: 'health', label: 'Health', icon: '❤️' },
   { key: 'settings', label: 'Settings', icon: '⚙️' },
 ];
 
@@ -92,7 +92,7 @@ function Shell() {
         {tab === 'review' ? <ReviewScreen /> : null}
         {tab === 'history' ? <HistoryScreen /> : null}
         {tab === 'weight' ? <WeightScreen /> : null}
-        {tab === 'heart' ? <HeartScreen /> : null}
+        {tab === 'health' ? <HealthScreen /> : null}
         {tab === 'settings' ? <SettingsScreen /> : null}
       </View>
 
