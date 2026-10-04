@@ -15,3 +15,6 @@ functions/.env.*
 google-services.json
 GoogleService-Info.plist
 serviceAccountKey.json
+
+# Firebase deploy cache — regenerated on every hosting deploy
+.firebase/
