@@ -129,6 +129,60 @@ export async function reviewMeals({ meals, targets, days }) {
   return result.data.text;
 }
 
+// --- Health snapshot -------------------------------------------------------
+
+// Ninety days is what every trend and association on the Health screen reads, and
+// capping the window here is also what keeps the document small: thirty metrics at
+// ninety points measures about 99 KB against Firestore's 1 MiB limit, so there is
+// an order of magnitude of headroom without needing to shed anything.
+const SNAPSHOT_DAYS = 90;
+
+/**
+ * Mirror the phone's Apple Health readings into Firestore so the web app can show
+ * them.
+ *
+ * This is the one place health data leaves the phone, and it is a copy rather than
+ * a source of truth — HealthKit stays authoritative, and the web shows this with the
+ * date it was captured so a stale copy is never mistaken for a live one.
+ *
+ * Values are rounded to two decimals: nothing here is meaningful past that, and it
+ * roughly halves what gets stored and shipped.
+ */
+export function saveHealthSnapshot(uid, series) {
+  const round = (value) => Math.round(value * 100) / 100;
+  const payload = Object.fromEntries(
+    Object.entries(series ?? {}).map(([key, points]) => [
+      key,
+      (points ?? []).slice(-SNAPSHOT_DAYS).map((point) => ({
+        date: point.date,
+        value: round(point.value),
+        ...(point.stages
+          ? {
+              stages: {
+                deep: round(point.stages.deep ?? 0),
+                rem: round(point.stages.rem ?? 0),
+                core: round(point.stages.core ?? 0),
+              },
+            }
+          : {}),
+      })),
+    ])
+  );
+
+  return setDoc(doc(db, 'users', uid, 'health', 'snapshot'), {
+    series: payload,
+    capturedAt: new Date().toISOString(),
+  });
+}
+
+export function watchHealthSnapshot(uid, callback) {
+  return onSnapshot(
+    doc(db, 'users', uid, 'health', 'snapshot'),
+    (snapshot) => callback(snapshot.exists() ? snapshot.data() : null),
+    (error) => console.warn('health snapshot watch failed', error)
+  );
+}
+
 export async function askCoach({ totals, targets, meals, question }) {
   const call = httpsCallable(functions, 'coachMeal', { timeout: 60_000 });
   const result = await call({

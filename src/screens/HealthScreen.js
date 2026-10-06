@@ -14,7 +14,7 @@ import {
   sleepIntakeAssociation,
   trend,
 } from '../lib/healthMetrics';
-import { watchRecentMeals } from '../lib/store';
+import { saveHealthSnapshot, watchHealthSnapshot, watchRecentMeals } from '../lib/store';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
 
@@ -24,19 +24,31 @@ export default function HealthScreen() {
   const [meals, setMeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
+  // Set only where the data came from Firestore rather than straight from HealthKit,
+  // so the screen can say how old the copy is instead of implying it is live.
+  const [capturedAt, setCapturedAt] = useState(null);
 
   useEffect(() => {
     if (!user) return undefined;
     return watchRecentMeals(user.uid, setMeals, 300);
   }, [user]);
 
+  // Off the phone, HealthKit does not exist — read the copy the phone mirrored.
   useEffect(() => {
-    if (!healthSupported) {
+    if (healthSupported || !user) return undefined;
+    return watchHealthSnapshot(user.uid, (snapshot) => {
+      setSeries(snapshot?.series ?? null);
+      setCapturedAt(snapshot?.capturedAt ?? null);
       setLoading(false);
-      return undefined;
-    }
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!healthSupported) return undefined;
 
     let cancelled = false;
+    let lastSynced = null;
+
     const read = async () => {
       const granted = await requestHealthAccess();
       if (cancelled) return;
@@ -49,6 +61,19 @@ export default function HealthScreen() {
       if (cancelled) return;
       setSeries(data);
       setLoading(false);
+
+      // Mirror to Firestore so the web app can show the same numbers. Skipped when
+      // nothing has changed since the last write this session, which is the common
+      // case when the tab is reopened within a few minutes.
+      if (!user) return;
+      const fingerprint = JSON.stringify(
+        Object.entries(data).map(([key, points]) => [key, points.length, points.at(-1)?.value])
+      );
+      if (fingerprint === lastSynced) return;
+      lastSynced = fingerprint;
+      saveHealthSnapshot(user.uid, data).catch((error) =>
+        console.warn('health snapshot save failed', error)
+      );
     };
     read();
 
@@ -62,7 +87,7 @@ export default function HealthScreen() {
       cancelled = true;
       subscription.remove();
     };
-  }, []);
+  }, [user]);
 
   const intake = useMemo(() => caloriesByDay(meals), [meals]);
   const sleepVsIntake = useMemo(
@@ -73,18 +98,6 @@ export default function HealthScreen() {
     () => (series ? intakeAssociation(series.restingHeartRate, intake) : null),
     [series, intake]
   );
-
-  if (!healthSupported) {
-    return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Health</Text>
-        <Empty
-          title="Only on the phone"
-          body="Apple Health lives on iOS, so these readings cannot reach the web version. Open Noodle on your iPhone."
-        />
-      </ScrollView>
-    );
-  }
 
   if (loading) {
     return (
@@ -102,6 +115,18 @@ export default function HealthScreen() {
         <Empty
           title="Health access is off"
           body="Noodle needs read access to show these. Open the Health app, then Sharing → Apps → Noodle, and turn the categories on."
+        />
+      </ScrollView>
+    );
+  }
+
+  if (!healthSupported && !series) {
+    return (
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.title}>Health</Text>
+        <Empty
+          title="Nothing synced yet"
+          body="Apple Health only exists on iOS. Open the Health tab on your iPhone once and it will mirror the readings here."
         />
       </ScrollView>
     );
@@ -131,9 +156,15 @@ export default function HealthScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Health</Text>
       <Text style={styles.subtitle}>
-        From Apple Health, last 90 days · {populated.length + (sleep.length ? 1 : 0)} metrics with
-        data
+        From Apple Health · {populated.length + (sleep.length ? 1 : 0)} metrics with data
       </Text>
+
+      {capturedAt ? (
+        <Text style={styles.syncNote}>
+          Synced from your iPhone {describeAge(capturedAt)}. Open the Health tab there to refresh
+          it.
+        </Text>
+      ) : null}
 
       {lastNight ? (
         <Card style={styles.heroCard}>
@@ -283,6 +314,23 @@ function MetricRow({ label, unit, value, meta, pill }) {
   );
 }
 
+/**
+ * How old the mirrored copy is, in words.
+ *
+ * Shown because a synced copy only refreshes when the phone's Health tab is opened.
+ * A three-day-old resting heart rate presented as today's would be worse than not
+ * showing it at all.
+ */
+function describeAge(iso) {
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (minutes < 2) return 'just now';
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 function meanOf(series) {
   if (!series?.length) return 0;
   return series.reduce((sum, point) => sum + point.value, 0) / series.length;
@@ -357,6 +405,14 @@ const styles = StyleSheet.create({
 
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.lg },
+  syncNote: {
+    fontSize: fonts.tiny,
+    color: colors.accent,
+    fontWeight: '600',
+    marginTop: -spacing.md,
+    marginBottom: spacing.lg,
+    lineHeight: 17,
+  },
 
   heroCard: { alignItems: 'center', paddingVertical: spacing.xl },
   heroValue: { fontSize: 56, fontWeight: '800', color: colors.ink, lineHeight: 62 },
