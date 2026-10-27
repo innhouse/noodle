@@ -10,7 +10,9 @@
  */
 export const LAB_MARKERS = [
   { key: 'ldl', label: 'LDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: 1.5, high: 3.4 } },
-  { key: 'nonHdl', label: 'Non-HDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: null },
+  // LifeLabs prints no interval for non-HDL; the report quotes the guideline optimum
+  // for intermediate and high-risk adults instead, so that is what stands in here.
+  { key: 'nonHdl', label: 'Non-HDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: null, high: 2.6 } },
   { key: 'hdl', label: 'HDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'higher', range: { low: 0.99, high: null } },
   { key: 'triglycerides', label: 'Triglycerides', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: null, high: 2.21 } },
   { key: 'totalCholesterol', label: 'Total cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: 2.0, high: 5.19 } },
