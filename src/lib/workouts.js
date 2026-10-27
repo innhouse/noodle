@@ -34,7 +34,6 @@ export function describeType(type) {
   return WORKOUT_TYPES[type] ?? { label: 'Workout', icon: '💪', kind: 'other' };
 }
 
-const M_TO_MILE = 0.000621371;
 
 export function formatDuration(minutes) {
   if (minutes == null) return '—';
@@ -45,20 +44,21 @@ export function formatDuration(minutes) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
-export function formatMiles(metres) {
+export function formatKm(metres) {
   if (!metres) return null;
-  const miles = metres * M_TO_MILE;
-  return `${miles.toFixed(miles < 10 ? 2 : 1)} mi`;
+  const km = metres / 1000;
+  return `${km.toFixed(km < 10 ? 2 : 1)} km`;
 }
 
-/** Minutes per mile, as "11:42 /mi". Null when the distance is too short to mean anything. */
+/** Minutes per kilometre, as "7:15 /km". Null when the distance is too short to mean anything. */
 export function formatPace(metres, minutes) {
   if (!metres || !minutes || metres < 200) return null;
-  const perMile = minutes / (metres * M_TO_MILE);
-  if (!Number.isFinite(perMile) || perMile > 60) return null;
-  const whole = Math.floor(perMile);
-  const seconds = Math.round((perMile - whole) * 60);
-  return `${whole}:${String(seconds).padStart(2, '0')} /mi`;
+  const perKm = minutes / (metres / 1000);
+  if (!Number.isFinite(perKm) || perKm > 40) return null;
+  const whole = Math.floor(perKm);
+  const seconds = Math.round((perKm - whole) * 60);
+  if (seconds === 60) return `${whole + 1}:00 /km`;
+  return `${whole}:${String(seconds).padStart(2, '0')} /km`;
 }
 
 /** Monday-based week key for grouping, as the local date of that Monday. */

@@ -6,7 +6,7 @@ import { describeAge, useHealthData } from '../lib/useHealthData';
 import {
   describeType,
   formatDuration,
-  formatMiles,
+  formatKm,
   formatPace,
   groupByWeek,
 } from '../lib/workouts';
@@ -73,7 +73,7 @@ export default function WorkoutsScreen() {
             <Text style={styles.weekTotals}>
               {week.sessions.length} session{week.sessions.length === 1 ? '' : 's'} ·{' '}
               {formatDuration(week.minutes)}
-              {week.metres ? ` · ${formatMiles(week.metres)}` : ''}
+              {week.metres ? ` · ${formatKm(week.metres)}` : ''}
             </Text>
           </View>
           {week.sessions.map((workout) => (
@@ -97,7 +97,7 @@ function WorkoutRow({ workout }) {
   const pace = formatPace(workout.metres, workout.durationMin);
   const details = [
     formatDuration(workout.durationMin),
-    formatMiles(workout.metres),
+    formatKm(workout.metres),
     pace,
     workout.kcal ? `${workout.kcal} kcal` : null,
   ].filter(Boolean);

@@ -12,9 +12,9 @@
  */
 const KG_TO_LB = 2.2046226218;
 const M_TO_INCH = 39.3700787;
-const M_TO_MILE = 0.000621371;
+const M_TO_KM = 0.001;
 const M_TO_FOOT = 3.2808399;
-const MS_TO_MPH = 2.23693629;
+const MS_TO_KMH = 3.6;
 
 /**
  * Every metric Noodle reads, with the unit HealthKit expects and how to reduce a
@@ -195,13 +195,13 @@ export const HEALTH_METRICS = {
     id: 'HKQuantityTypeIdentifierDistanceWalkingRunning',
     unit: 'm',
     label: 'Walking + running distance',
-    short: 'mi',
+    short: 'km',
     group: 'activity',
     aggregate: 'sum',
     betterWhen: 'higher',
     decimals: 2,
-    noise: 0.3,
-    convert: (metres) => metres * M_TO_MILE,
+    noise: 0.5,
+    convert: (metres) => metres * M_TO_KM,
   },
   flightsClimbed: {
     id: 'HKQuantityTypeIdentifierFlightsClimbed',
@@ -251,13 +251,13 @@ export const HEALTH_METRICS = {
     id: 'HKQuantityTypeIdentifierWalkingSpeed',
     unit: 'm/s',
     label: 'Walking speed',
-    short: 'mph',
+    short: 'km/h',
     group: 'fitness',
     aggregate: 'mean',
     betterWhen: 'higher',
     decimals: 2,
-    noise: 0.1,
-    convert: (metresPerSecond) => metresPerSecond * MS_TO_MPH,
+    noise: 0.15,
+    convert: (metresPerSecond) => metresPerSecond * MS_TO_KMH,
   },
   walkingSteadiness: {
     id: 'HKQuantityTypeIdentifierAppleWalkingSteadiness',

@@ -7,7 +7,7 @@ import {
   againstBaseline,
   describeType,
   formatDuration,
-  formatMiles,
+  formatKm,
   formatPace,
   onDay,
 } from '../lib/workouts';
@@ -145,7 +145,7 @@ function WorkoutCard({ workout }) {
   const pace = formatPace(workout.metres, workout.durationMin);
   const details = [
     formatDuration(workout.durationMin),
-    formatMiles(workout.metres),
+    formatKm(workout.metres),
     pace,
     workout.kcal ? `${workout.kcal} kcal` : null,
   ].filter(Boolean);
