@@ -5,11 +5,14 @@ import { useAuth } from '../context/AuthContext';
 import { dayKey, formatDayLabel } from '../lib/dates';
 import {
   formatLab,
+  formatRange,
+  historyFor,
   LAB_MARKERS,
   latestAndPrevious,
   markerByKey,
   markersWithData,
   meetsTarget,
+  outsideRange,
 } from '../lib/labs';
 import { deleteLabs, saveLabs, watchLabs } from '../lib/store';
 import { colors, fonts, radius, spacing } from '../theme';
@@ -29,6 +32,7 @@ export default function LabsScreen() {
   const [mode, setMode] = useState(null); // null | 'entry' | 'targets' | 'paste'
   const [pasted, setPasted] = useState('');
   const [pasteResult, setPasteResult] = useState(null);
+  const [open, setOpen] = useState(null);
   const [draft, setDraft] = useState({ date: dayKey(), values: {} });
   const [targets, setTargets] = useState({});
   const [saving, setSaving] = useState(false);
@@ -247,39 +251,76 @@ export default function LabsScreen() {
         const value = latest.values[marker.key];
         const target = profile?.labTargets?.[marker.key];
         const ok = meetsTarget(value, target, marker);
+        const flagged = outsideRange(value, marker.range);
         const change = previous ? value - previous.values[marker.key] : null;
+        const expanded = open === marker.key;
+        const history = expanded ? historyFor(tests, marker.key) : [];
         return (
-          <Card key={marker.key} style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>{marker.label}</Text>
-              <Text style={styles.rowMeta}>
-                {formatDayLabel(latest.date)}
-                {target != null ? ` · target ${marker.betterWhen === 'lower' ? '≤' : '≥'} ${target}` : ''}
-              </Text>
-              {change != null && Math.abs(change) >= 10 ** -marker.decimals ? (
-                <View style={styles.pillWrap}>
-                  <Pill
-                    tone={
-                      !marker.betterWhen
-                        ? 'neutral'
-                        : (marker.betterWhen === 'lower') === change < 0
-                          ? 'good'
-                          : 'warn'
-                    }
+          <Pressable key={marker.key} onPress={() => setOpen(expanded ? null : marker.key)}>
+            <Card style={styles.rowCard}>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>{marker.label}</Text>
+                  <Text style={styles.rowMeta}>
+                    {formatDayLabel(latest.date)}
+                    {formatRange(marker.range) ? ` · lab range ${formatRange(marker.range)}` : ''}
+                    {target != null
+                      ? ` · your target ${marker.betterWhen === 'lower' ? '≤' : '≥'} ${target}`
+                      : ''}
+                  </Text>
+                  {change != null && Math.abs(change) >= 10 ** -marker.decimals ? (
+                    <View style={styles.pillWrap}>
+                      <Pill
+                        tone={
+                          !marker.betterWhen
+                            ? 'neutral'
+                            : (marker.betterWhen === 'lower') === change < 0
+                              ? 'good'
+                              : 'warn'
+                        }
+                      >
+                        {change > 0 ? '↑' : '↓'} {Math.abs(change).toFixed(marker.decimals)} since{' '}
+                        {formatDayLabel(previous.date)}
+                      </Pill>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.rowValueBlock}>
+                  <Text
+                    style={[
+                      styles.rowValue,
+                      (ok === false || flagged) && { color: colors.accent },
+                    ]}
                   >
-                    {change > 0 ? '↑' : '↓'} {Math.abs(change).toFixed(marker.decimals)} since{' '}
-                    {formatDayLabel(previous.date)}
-                  </Pill>
+                    {formatLab(value, marker)}
+                  </Text>
+                  <Text style={styles.rowUnit}>
+                    {marker.unit}
+                    {flagged ? ' · outside lab range' : ''}
+                  </Text>
+                </View>
+              </View>
+
+              {expanded ? (
+                <View style={styles.history}>
+                  {history.map((point) => (
+                    <View key={point.date} style={styles.historyRow}>
+                      <Text style={styles.historyDate}>{longDate(point.date)}</Text>
+                      <Text
+                        style={[
+                          styles.historyValue,
+                          outsideRange(point.value, marker.range) && { color: colors.accent },
+                        ]}
+                      >
+                        {formatLab(point.value, marker)}
+                      </Text>
+                    </View>
+                  ))}
+                  <Text style={styles.historyHint}>Tap to collapse</Text>
                 </View>
               ) : null}
-            </View>
-            <View style={styles.rowValueBlock}>
-              <Text style={[styles.rowValue, ok === false && { color: colors.accent }]}>
-                {formatLab(value, marker)}
-              </Text>
-              <Text style={styles.rowUnit}>{marker.unit}</Text>
-            </View>
-          </Card>
+            </Card>
+          </Pressable>
         );
       })}
 
@@ -306,11 +347,22 @@ export default function LabsScreen() {
       ) : null}
 
       <Text style={styles.disclaimer}>
-        Results as the lab reported them, against targets your own care team set. An orange number
-        is simply one that hasn’t reached its target yet; what to do about it is their call.
+        Results as the lab reported them. “Lab range” is the laboratory’s usual interval for adults
+        and is not a goal; your target is whatever your care team set, and after a heart attack it
+        is usually well inside the lab range. Orange marks a value outside the range or short of
+        your target; what to do about it is their call.
       </Text>
     </ScrollView>
   );
+}
+
+function longDate(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 const styles = StyleSheet.create({
@@ -333,7 +385,13 @@ const styles = StyleSheet.create({
   },
   pasteResult: { fontSize: fonts.small, color: colors.ink, marginBottom: spacing.md },
 
+  rowCard: {},
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  history: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: spacing.md, paddingTop: spacing.sm },
+  historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
+  historyDate: { fontSize: fonts.small, color: colors.inkSoft },
+  historyValue: { fontSize: fonts.small, fontWeight: '700', color: colors.ink },
+  historyHint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'center', marginTop: spacing.xs },
   rowLabel: { fontSize: fonts.body, fontWeight: '600', color: colors.ink },
   rowMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
   pillWrap: { marginTop: spacing.xs, alignSelf: 'flex-start' },
