@@ -254,7 +254,7 @@ export default function LabsScreen() {
         const flagged = outsideRange(value, marker.range);
         const change = previous ? value - previous.values[marker.key] : null;
         const expanded = open === marker.key;
-        const history = expanded ? historyFor(tests, marker.key) : [];
+        const history = historyFor(tests, marker.key);
         return (
           <Pressable key={marker.key} onPress={() => setOpen(expanded ? null : marker.key)}>
             <Card style={styles.rowCard}>
@@ -301,9 +301,13 @@ export default function LabsScreen() {
                 </View>
               </View>
 
+              {history.length > 1 ? (
+                <LabChart marker={marker} points={history} target={target} />
+              ) : null}
+
               {expanded ? (
                 <View style={styles.history}>
-                  {history.map((point) => (
+                  {[...history].reverse().map((point) => (
                     <View key={point.date} style={styles.historyRow}>
                       <Text style={styles.historyDate}>{longDate(point.date)}</Text>
                       <Text
@@ -356,6 +360,112 @@ export default function LabsScreen() {
   );
 }
 
+/**
+ * One marker over time, as a lollipop chart.
+ *
+ * Shaded band: the lab's reference interval. Dashed line: the person's own target.
+ * Dots: results, green inside the lab range and orange outside. Drawn with plain
+ * views so phone and web render it identically with nothing native to install.
+ */
+function LabChart({ marker, points, target }) {
+  const [width, setWidth] = useState(0);
+  const height = 150;
+  const padTop = 22;
+  const padBottom = 26;
+  const padX = 18;
+  const plotH = height - padTop - padBottom;
+
+  if (!points.length) return null;
+
+  const values = points.map((p) => p.value);
+  const candidates = [...values];
+  if (marker.range?.low != null) candidates.push(marker.range.low);
+  if (marker.range?.high != null) candidates.push(marker.range.high);
+  if (target != null) candidates.push(Number(target));
+  let min = Math.min(...candidates);
+  let max = Math.max(...candidates);
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const pad = (max - min) * 0.12;
+  min -= pad;
+  max += pad;
+  if (min < 0 && Math.min(...candidates) >= 0) min = 0;
+
+  const yFor = (v) => padTop + plotH - ((v - min) / (max - min)) * plotH;
+  const dayOf = (key) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d).getTime();
+  };
+  const t0 = dayOf(points[0].date);
+  const t1 = dayOf(points[points.length - 1].date);
+  const plotW = Math.max(0, width - padX * 2);
+  const xFor = (key) => padX + (t1 === t0 ? plotW / 2 : ((dayOf(key) - t0) / (t1 - t0)) * plotW);
+
+  const bandTop = marker.range?.high != null ? yFor(marker.range.high) : padTop;
+  const bandBottom = marker.range?.low != null ? yFor(marker.range.low) : padTop + plotH;
+  const baseline = padTop + plotH;
+
+  return (
+    <View
+      style={[styles.chart, { height }]}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+    >
+      {width > 0 ? (
+        <>
+          {marker.range ? (
+            <View
+              style={[
+                styles.band,
+                { top: bandTop, height: Math.max(2, bandBottom - bandTop), left: padX, width: plotW },
+              ]}
+            />
+          ) : null}
+          {marker.range ? (
+            <Text style={[styles.bandLabel, { top: bandTop - 14, right: padX }]}>
+              lab range {formatRange(marker.range)}
+            </Text>
+          ) : null}
+          {target != null ? (
+            <>
+              <View style={[styles.targetLine, { top: yFor(Number(target)), left: padX, width: plotW }]} />
+              <Text style={[styles.targetLabel, { top: yFor(Number(target)) - 14, left: padX }]}>
+                target {target}
+              </Text>
+            </>
+          ) : null}
+          <View style={[styles.axis, { top: baseline, left: padX, width: plotW }]} />
+          {points.map((point) => {
+            const x = xFor(point.date);
+            const y = yFor(point.value);
+            const out = outsideRange(point.value, marker.range);
+            const colour = out ? colors.accent : colors.primary;
+            return (
+              <View key={point.date}>
+                <View style={[styles.stem, { left: x, top: y, height: baseline - y, backgroundColor: colour }]} />
+                <View style={[styles.dot, { left: x - 6, top: y - 6, backgroundColor: colour }]} />
+                <Text style={[styles.dotLabel, { left: x - 24, top: y - 20 }]}>
+                  {formatLab(point.value, marker)}
+                </Text>
+                <Text style={[styles.dateLabel, { left: x - 24, top: baseline + 4 }]}>
+                  {shortDate(point.date)}
+                </Text>
+              </View>
+            );
+          })}
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function shortDate(key) {
+  const [y, m] = key.split('-').map(Number);
+  const month = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short' });
+  return `${month} ${String(y).slice(2)}`;
+}
+
 function longDate(key) {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, {
@@ -388,6 +498,16 @@ const styles = StyleSheet.create({
   rowCard: {},
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   history: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: spacing.md, paddingTop: spacing.sm },
+  chart: { width: '100%', marginTop: spacing.md, overflow: 'hidden' },
+  band: { position: 'absolute', backgroundColor: colors.primarySoft, borderRadius: 4 },
+  bandLabel: { position: 'absolute', fontSize: 10, color: colors.primary, fontWeight: '600' },
+  targetLine: { position: 'absolute', height: 0, borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.ink },
+  targetLabel: { position: 'absolute', fontSize: 10, color: colors.ink, fontWeight: '600' },
+  axis: { position: 'absolute', height: 1, backgroundColor: colors.line },
+  stem: { position: 'absolute', width: 2, opacity: 0.5 },
+  dot: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.card },
+  dotLabel: { position: 'absolute', width: 48, textAlign: 'center', fontSize: 10, fontWeight: '700', color: colors.ink },
+  dateLabel: { position: 'absolute', width: 48, textAlign: 'center', fontSize: 9, color: colors.inkSoft },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
   historyDate: { fontSize: fonts.small, color: colors.inkSoft },
   historyValue: { fontSize: fonts.small, fontWeight: '700', color: colors.ink },
