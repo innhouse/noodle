@@ -14,6 +14,7 @@ import {
   queryCategorySamples,
   queryQuantitySamples,
   queryStatisticsForQuantity,
+  queryWorkoutSamples,
   requestAuthorization,
 } from '@kingstinct/react-native-healthkit';
 
@@ -24,6 +25,8 @@ export { HEALTH_METRICS, METRIC_GROUPS } from './healthMetrics';
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass';
 const ACTIVE_ENERGY = 'HKQuantityTypeIdentifierActiveEnergyBurned';
 const SLEEP_ANALYSIS = 'HKCategoryTypeIdentifierSleepAnalysis';
+const HEART_RATE = 'HKQuantityTypeIdentifierHeartRate';
+const WORKOUT = 'HKWorkoutTypeIdentifier';
 
 // HKCategoryValueSleepAnalysis. inBed (0) and awake (2) are not sleep — counting
 // them would turn a restless night into a long one.
@@ -34,6 +37,8 @@ const READ_TYPES = [
   BODY_MASS,
   ACTIVE_ENERGY,
   SLEEP_ANALYSIS,
+  HEART_RATE,
+  WORKOUT,
   ...Object.values(HEALTH_METRICS).map((metric) => metric.id),
 ];
 
@@ -125,6 +130,101 @@ export async function activeEnergyForDay(day) {
     console.warn('health energy read failed', error);
     return null;
   }
+}
+
+/**
+ * Every workout Health holds from `since` onwards, newest first, flattened to
+ * plain numbers so the result can be stored and shown on the web.
+ *
+ * Any app that writes workouts to Health arrives here — the watch's own runs, a
+ * strength session logged in Jefit, a walk from the phone. Heart rate comes from a
+ * second query per workout, because it lives in separate samples rather than on
+ * the workout itself; a session recorded without the watch simply has none.
+ *
+ * Health has no place for sets, reps or weights lifted, so a strength session is
+ * a duration and a heart-rate trace and nothing more. That is Health's limit, not
+ * a choice made here.
+ */
+export async function workoutsSince(since) {
+  let workouts;
+  try {
+    workouts = await queryWorkoutSamples({
+      limit: 0,
+      ascending: false,
+      filter: { date: { startDate: since, endDate: new Date() } },
+    });
+  } catch (error) {
+    console.warn('health workout read failed', error);
+    return [];
+  }
+
+  const results = [];
+  for (const workout of workouts ?? []) {
+    try {
+      const start = new Date(workout.startDate);
+      const end = new Date(workout.endDate);
+      const durationMin = quantityIn(workout.duration, 's') / 60;
+      if (!(durationMin > 0)) continue;
+
+      let avgHr = null;
+      let maxHr = null;
+      try {
+        const stats = await workout.getStatistic(HEART_RATE, 'count/min');
+        avgHr = stats?.averageQuantity?.quantity ?? null;
+        maxHr = stats?.maximumQuantity?.quantity ?? null;
+      } catch {
+        // No heart-rate samples for this session; common for phone-only entries.
+      }
+
+      const metadata = workout.metadata ?? {};
+      results.push({
+        id: workout.uuid,
+        type: workout.workoutActivityType,
+        start: start.toISOString(),
+        end: end.toISOString(),
+        date: localDayKey(start),
+        durationMin: round(durationMin, 1),
+        metres: workout.totalDistance ? round(quantityIn(workout.totalDistance, 'm'), 0) : null,
+        kcal: workout.totalEnergyBurned
+          ? round(quantityIn(workout.totalEnergyBurned, 'kcal'), 0)
+          : null,
+        avgHr: avgHr == null ? null : Math.round(avgHr),
+        maxHr: maxHr == null ? null : Math.round(maxHr),
+        indoor: metadata.HKIndoorWorkout === true || metadata.HKIndoorWorkout === 1,
+        source: sourceName(workout, metadata),
+      });
+    } catch (error) {
+      console.warn('health workout parse failed', error);
+    }
+  }
+  return results;
+}
+
+function quantityIn(quantity, unit) {
+  if (quantity == null) return 0;
+  if (typeof quantity === 'number') return quantity;
+  const value = quantity.quantity ?? 0;
+  const from = quantity.unit ?? unit;
+  if (from === unit) return value;
+  // The few conversions HealthKit hands back for these fields.
+  if (unit === 's' && from === 'min') return value * 60;
+  if (unit === 'm' && from === 'km') return value * 1000;
+  if (unit === 'm' && from === 'mi') return value * 1609.344;
+  if (unit === 'kcal' && from === 'kJ') return value / 4.184;
+  return value;
+}
+
+function sourceName(workout, metadata) {
+  const revision = workout.sourceRevision ?? workout.source;
+  const name = revision?.source?.name ?? revision?.name;
+  if (name) return name;
+  if (metadata.HKWorkoutBrandName) return String(metadata.HKWorkoutBrandName);
+  return null;
+}
+
+function round(value, decimals) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
 function localDayKey(date) {

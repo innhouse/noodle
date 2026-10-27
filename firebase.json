@@ -1,7 +1,11 @@
 {
   "hosting": {
     "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
       {
         "comment": "Expo web builds as a single-page app, so every path has to serve index.html or a refresh on any screen 404s.",
@@ -16,13 +20,5 @@
   },
   "storage": {
     "rules": "storage.rules"
-  },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "runtime": "nodejs22",
-      "ignore": ["node_modules", ".git", "firebase-debug.log", "*.local"]
-    }
-  ]
+  }
 }

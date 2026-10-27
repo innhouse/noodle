@@ -9,7 +9,6 @@ import {
 
 import { auth, firebaseReady } from '../lib/firebase';
 import { saveProfile, watchProfile } from '../lib/store';
-import { computeTargets } from '../lib/nutrition';
 
 const AuthContext = createContext(null);
 
@@ -42,10 +41,6 @@ export function AuthProvider({ children }) {
       user,
       profile,
       loading,
-      // Targets are derived, never stored — otherwise they silently go stale the
-      // moment the profile changes and nobody notices for a month.
-      targets: computeTargets(profile),
-      needsProfile: Boolean(user) && !profile?.weightKg,
       signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
       signUp: (email, password) => createUserWithEmailAndPassword(auth, email, password),
       resetPassword: (email) => sendPasswordResetEmail(auth, email),

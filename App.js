@@ -13,33 +13,25 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { firebaseReady } from './src/lib/firebase';
-import CoachScreen from './src/screens/CoachScreen';
 import HealthScreen from './src/screens/HealthScreen';
-import HistoryScreen from './src/screens/HistoryScreen';
-import LogMealScreen from './src/screens/LogMealScreen';
-import ReviewScreen from './src/screens/ReviewScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import TodayScreen from './src/screens/TodayScreen';
 import WeightScreen from './src/screens/WeightScreen';
+import WorkoutsScreen from './src/screens/WorkoutsScreen';
 import { colors, fonts, spacing } from './src/theme';
 
 const TABS = [
-  { key: 'today', label: 'Today', icon: '🍽' },
-  { key: 'review', label: 'Review', icon: '🔍' },
-  { key: 'history', label: 'History', icon: '📈' },
-  { key: 'weight', label: 'Weight', icon: '⚖️' },
+  { key: 'today', label: 'Today', icon: '☀️' },
+  { key: 'workouts', label: 'Workouts', icon: '🏃' },
   { key: 'health', label: 'Health', icon: '❤️' },
+  { key: 'weight', label: 'Weight', icon: '⚖️' },
   { key: 'settings', label: 'Settings', icon: '⚙️' },
 ];
 
 function Shell() {
   const { user, loading } = useAuth();
   const [tab, setTab] = useState('today');
-  // Full-screen flows that sit above the tabs rather than inside them.
-  const [overlay, setOverlay] = useState(null);
-  // The meal being corrected, when the log screen is opened to edit rather than add.
-  const [editing, setEditing] = useState(null);
 
   if (!firebaseReady) {
     return (
@@ -62,37 +54,13 @@ function Shell() {
 
   if (!user) return <SignInScreen />;
 
-  if (overlay === 'log') {
-    const close = () => {
-      setOverlay(null);
-      setEditing(null);
-    };
-    return <LogMealScreen editMeal={editing} onDone={close} onCancel={close} />;
-  }
-  if (overlay === 'coach') {
-    return <CoachScreen onClose={() => setOverlay(null)} />;
-  }
-
   return (
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
-        {tab === 'today' ? (
-          <TodayScreen
-            onLogMeal={() => {
-              setEditing(null);
-              setOverlay('log');
-            }}
-            onEditMeal={(meal) => {
-              setEditing(meal);
-              setOverlay('log');
-            }}
-            onOpenCoach={() => setOverlay('coach')}
-          />
-        ) : null}
-        {tab === 'review' ? <ReviewScreen /> : null}
-        {tab === 'history' ? <HistoryScreen /> : null}
-        {tab === 'weight' ? <WeightScreen /> : null}
+        {tab === 'today' ? <TodayScreen /> : null}
+        {tab === 'workouts' ? <WorkoutsScreen /> : null}
         {tab === 'health' ? <HealthScreen /> : null}
+        {tab === 'weight' ? <WeightScreen /> : null}
         {tab === 'settings' ? <SettingsScreen /> : null}
       </View>
 

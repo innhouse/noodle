@@ -1,14 +1,4 @@
 {
-  "indexes": [
-    {
-      "comment": "TodayScreen filters meals to one day and orders them by time. Firestore needs this composite index for that pair; without it the query fails at runtime rather than at deploy.",
-      "collectionGroup": "meals",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "dayKey", "order": "ASCENDING" },
-        { "fieldPath": "loggedAt", "order": "ASCENDING" }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }

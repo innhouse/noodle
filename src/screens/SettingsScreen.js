@@ -3,12 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { healthSupported } from '../lib/health';
-import {
-  ACTIVE_ENERGY_SHARES,
-  ACTIVITY_LEVELS,
-  computeTargets,
-  LOSS_RATES,
-} from '../lib/nutrition';
+import { deleteMealData } from '../lib/store';
 import {
   cmToFeetInches,
   displayLb,
@@ -28,32 +23,21 @@ const SYNC_WEIGHT_OPTIONS = [
 export default function SettingsScreen() {
   const { user, profile, updateProfile, signOut } = useAuth();
   // The draft holds what the user typed, in pounds and feet/inches. It is converted
-  // to metric only on save and on the live preview below.
+  // to metric only on save.
   const [draft, setDraft] = useState({});
   const [saved, setSaved] = useState(false);
+  const [cleanup, setCleanup] = useState(null);
 
   useEffect(() => {
     const height = cmToFeetInches(profile?.heightCm);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft({
       ...profile,
       weightLb: displayLb(profile?.weightKg),
-      goalWeightLb: displayLb(profile?.goalWeightKg),
       feet: height.feet,
       inches: height.inches,
     });
   }, [profile]);
-
-  const metric = {
-    ...draft,
-    weightKg: draft.weightLb ? lbToKg(Number(draft.weightLb)) : undefined,
-    goalWeightKg: draft.goalWeightLb ? lbToKg(Number(draft.goalWeightLb)) : undefined,
-    heightCm: feetInchesToCm(draft.feet, draft.inches) ?? undefined,
-    age: Number(draft.age) || undefined,
-  };
-
-  // Preview the budget the current draft would produce, so the effect of changing
-  // activity level or loss rate is visible before committing to it.
-  const preview = computeTargets(metric);
 
   function set(patch) {
     setDraft((previous) => ({ ...previous, ...patch }));
@@ -62,20 +46,23 @@ export default function SettingsScreen() {
 
   async function save() {
     await updateProfile({
-      weightKg: metric.weightKg ?? null,
-      heightCm: metric.heightCm ?? null,
-      age: metric.age ?? null,
-      goalWeightKg: metric.goalWeightKg ?? null,
-      sex: draft.sex ?? 'male',
-      activity: draft.activity ?? 1.375,
-      lossRate: draft.lossRate ?? 0.4536,
-      manualCalories: Number(draft.manualCalories) || null,
-      manualProtein: Number(draft.manualProtein) || null,
-      activeEnergyShare: draft.activeEnergyShare ?? (draft.useActiveEnergy ? 0.5 : 0),
-      useActiveEnergy: Boolean(draft.useActiveEnergy),
+      weightKg: draft.weightLb ? lbToKg(Number(draft.weightLb)) : null,
+      heightCm: feetInchesToCm(draft.feet, draft.inches) ?? null,
+      age: Number(draft.age) || null,
       syncHealthWeight: draft.syncHealthWeight !== false,
     });
     setSaved(true);
+  }
+
+  async function removeMeals() {
+    setCleanup({ running: true });
+    try {
+      const result = await deleteMealData(user.uid);
+      setCleanup({ done: true, ...result });
+    } catch (error) {
+      console.warn('meal cleanup failed', error);
+      setCleanup({ failed: true });
+    }
   }
 
   return (
@@ -85,7 +72,7 @@ export default function SettingsScreen() {
       <Card>
         <Text style={styles.cardTitle}>About you</Text>
         <Text style={styles.cardBody}>
-          Used to work out how many calories you burn in a day. Nothing leaves your account.
+          Weight is kept in step with the Weight tab. Nothing leaves your account.
         </Text>
 
         <Field
@@ -122,75 +109,15 @@ export default function SettingsScreen() {
           keyboardType="number-pad"
           placeholder="40"
         />
-        <Dropdown
-          label="Sex"
-          hint="Only affects the metabolic rate equation."
-          value={draft.sex ?? 'male'}
-          options={[
-            { label: 'Male', value: 'male' },
-            { label: 'Female', value: 'female' },
-          ]}
-          onChange={(sex) => set({ sex })}
-        />
       </Card>
-
-      <Card>
-        <Text style={styles.cardTitle}>Goal</Text>
-
-        <Field
-          label="Goal weight (lb)"
-          value={String(draft.goalWeightLb ?? '')}
-          onChangeText={(text) => set({ goalWeightLb: text })}
-          keyboardType="decimal-pad"
-          placeholder="160"
-          hint="Your protein target is set against this, since it exists to protect muscle rather than scale with fat."
-        />
-        <Dropdown
-          label="Activity level"
-          value={draft.activity ?? 1.375}
-          options={ACTIVITY_LEVELS.map((level) => ({
-            label: level.label,
-            value: level.value,
-            hint: level.hint,
-          }))}
-          onChange={(activity) => set({ activity })}
-        />
-        <Dropdown
-          label="Rate of loss"
-          value={draft.lossRate ?? 0.4536}
-          options={LOSS_RATES}
-          onChange={(lossRate) => set({ lossRate })}
-          hint="Faster is not better. Above about 1½ lb a week you start losing muscle along with the fat."
-        />
-      </Card>
-
-      {preview.calories ? (
-        <Card style={styles.previewCard}>
-          <Text style={styles.previewTitle}>Your daily targets</Text>
-          <View style={styles.previewRow}>
-            <Preview label="Calories" value={preview.calories} />
-            <Preview label="Protein" value={`${preview.protein}g`} />
-            <Preview label="Carbs" value={`${preview.carbs}g`} />
-            <Preview label="Fat" value={`${preview.fat}g`} />
-          </View>
-          {preview.tdee ? (
-            <Text style={styles.previewDetail}>
-              You burn roughly {preview.tdee} kcal a day ({preview.bmr} at rest).
-            </Text>
-          ) : null}
-        </Card>
-      ) : null}
 
       {healthSupported ? (
         <Card>
           <Text style={styles.cardTitle}>Apple Health</Text>
-          <Dropdown
-            label="How much of your activity counts towards your budget?"
-            value={draft.activeEnergyShare ?? (draft.useActiveEnergy ? 0.5 : 0)}
-            options={ACTIVE_ENERGY_SHARES}
-            onChange={(activeEnergyShare) => set({ activeEnergyShare })}
-            hint="Health reports active energy only — your resting burn is already in the target, so never add the larger total figure. Phone-only estimates run high; a watch is more trustworthy."
-          />
+          <Text style={styles.cardBody}>
+            Workouts, sleep and heart readings are read every time Noodle opens and copied to
+            your account so the web app can show them. Noodle never writes to Health.
+          </Text>
           <Dropdown
             label="Weigh-ins"
             value={draft.syncHealthWeight !== false}
@@ -201,49 +128,41 @@ export default function SettingsScreen() {
         </Card>
       ) : null}
 
-      <Card>
-        <Text style={styles.cardTitle}>Override the numbers</Text>
-        <Text style={styles.cardBody}>
-          Leave blank to use the calculated targets. Fill these in if a dietitian or your own
-          experience says different.
-        </Text>
-        <Field
-          label="Calorie target"
-          value={String(draft.manualCalories ?? '')}
-          onChangeText={(text) => set({ manualCalories: text })}
-          keyboardType="number-pad"
-          placeholder="Calculated"
-        />
-        <Field
-          label="Protein target (g)"
-          value={String(draft.manualProtein ?? '')}
-          onChangeText={(text) => set({ manualProtein: text })}
-          keyboardType="number-pad"
-          placeholder="Calculated"
-        />
-      </Card>
-
       <Button title={saved ? 'Saved' : 'Save'} onPress={save} />
+
+      <Card style={styles.cleanupCard}>
+        <Text style={styles.cardTitle}>Old meal data</Text>
+        <Text style={styles.cardBody}>
+          Noodle used to track meals. The logged meals and photos are still in your account;
+          this removes them for good.
+        </Text>
+        {cleanup?.done ? (
+          <Text style={styles.cleanupResult}>
+            Removed {cleanup.meals} meal{cleanup.meals === 1 ? '' : 's'} and {cleanup.photos}{' '}
+            photo{cleanup.photos === 1 ? '' : 's'}.
+          </Text>
+        ) : (
+          <Button
+            title="Delete meal data"
+            variant="danger"
+            onPress={removeMeals}
+            loading={cleanup?.running}
+          />
+        )}
+        {cleanup?.failed ? (
+          <Text style={styles.cleanupResult}>That didn't work. Try again in a moment.</Text>
+        ) : null}
+      </Card>
 
       <View style={{ height: spacing.xl }} />
       <Text style={styles.account}>Signed in as {user?.email}</Text>
       <Button title="Sign out" variant="ghost" onPress={signOut} />
 
       <Text style={styles.disclaimer}>
-        Noodle estimates. Photo-based calorie counts carry real error bars, and nothing here is
-        medical advice — if you have a condition that makes intake matter clinically, work with
-        someone qualified.
+        Noodle shows your own Health readings back to you and compares them only with your own
+        earlier ones. It is not a medical device and nothing here is medical advice.
       </Text>
     </ScrollView>
-  );
-}
-
-function Preview({ label, value }) {
-  return (
-    <View style={styles.preview}>
-      <Text style={styles.previewValue}>{value}</Text>
-      <Text style={styles.previewLabel}>{label}</Text>
-    </View>
   );
 }
 
@@ -255,13 +174,8 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink, marginBottom: spacing.xs },
   cardBody: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md, lineHeight: 20 },
 
-  previewCard: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  previewTitle: { fontSize: fonts.small, fontWeight: '700', color: colors.primary, marginBottom: spacing.md, textTransform: 'uppercase', letterSpacing: 0.6 },
-  previewRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  preview: { alignItems: 'center', flex: 1 },
-  previewValue: { fontSize: fonts.big, fontWeight: '800', color: colors.ink },
-  previewLabel: { fontSize: fonts.tiny, color: colors.inkSoft, textTransform: 'uppercase' },
-  previewDetail: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.md, textAlign: 'center' },
+  cleanupCard: { marginTop: spacing.lg },
+  cleanupResult: { fontSize: fonts.small, color: colors.ink, lineHeight: 20 },
 
   account: { fontSize: fonts.small, color: colors.inkSoft, textAlign: 'center' },
   disclaimer: {

@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { dayKey, formatDayLabel } from '../lib/dates';
-import { weeklyChange, weightTrend } from '../lib/nutrition';
+import { weeklyChange, weightTrend } from '../lib/weight';
 import { healthSupported, requestHealthAccess, weightSamplesSince } from '../lib/health';
 import { saveWeight, saveWeights, watchWeights } from '../lib/store';
 import { displayLb, kgToLb, lbToKg } from '../lib/units';

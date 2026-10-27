@@ -25,6 +25,10 @@ export async function weightSamplesSince() {
   return [];
 }
 
+export async function workoutsSince() {
+  return [];
+}
+
 export async function activeEnergyForDay() {
   return null;
 }

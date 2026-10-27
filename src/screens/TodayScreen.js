@@ -1,285 +1,233 @@
-import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { addDays, dayKey, formatDayLabel, formatTime } from '../lib/dates';
+import { healthSupported } from '../lib/health';
+import { describeAge, formatHours, useHealthData } from '../lib/useHealthData';
 import {
-  Alert,
-  AppState,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+  againstBaseline,
+  describeType,
+  formatDuration,
+  formatMiles,
+  formatPace,
+  onDay,
+} from '../lib/workouts';
+import { colors, fonts, spacing } from '../theme';
+import { Card, Empty } from '../ui';
 
-import { useAuth } from '../context/AuthContext';
-import { addDays, dayKey, formatDayLabel, formatTime, isToday, MEAL_TYPES } from '../lib/dates';
-import { activityBonus, perMealProtein, sumMeals } from '../lib/nutrition';
-import { activeEnergyForDay, healthSupported, requestHealthAccess } from '../lib/health';
-import { deleteMeal, watchMeals } from '../lib/store';
-import { colors, fonts, radius, spacing } from '../theme';
-import { Button, Card, Empty, MacroBar } from '../ui';
+/**
+ * The morning view: what happened last night, how the body reads this morning,
+ * and what has been done today.
+ *
+ * Every comparison is against the same person's previous month. Nothing here
+ * says what a number should be — on a beta-blocker, after a layoff, in a different
+ * time zone, "normal" is whatever the last few weeks looked like, and that is the
+ * only baseline this screen uses.
+ */
+export default function TodayScreen() {
+  const { series, workouts, loading, denied, capturedAt } = useHealthData();
+  const today = dayKey();
 
-export default function TodayScreen({ onLogMeal, onOpenCoach, onEditMeal }) {
-  const { user, profile, targets } = useAuth();
-  const [day, setDay] = useState(dayKey());
-  const [meals, setMeals] = useState([]);
-  const [activeEnergy, setActiveEnergy] = useState(null);
-
-  useEffect(() => {
-    if (!user) return undefined;
-    return watchMeals(user.uid, day, setMeals);
-  }, [user, day]);
-
-  useEffect(() => {
-    if (!healthSupported) return undefined;
-
-    let cancelled = false;
-    const refresh = async () => {
-      if (!(await requestHealthAccess())) return;
-      // Read the day being viewed, not today: scrolling back should show the
-      // activity that actually accompanied those meals.
-      const value = await activeEnergyForDay(day);
-      if (!cancelled) setActiveEnergy(value);
-    };
-
-    refresh();
-
-    // Re-read whenever the app comes back to the foreground. Health keeps
-    // accumulating while Noodle is closed, and a figure captured once at mount goes
-    // stale within minutes of walking anywhere — which reads as Noodle disagreeing
-    // with the Health app rather than simply not having looked recently.
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
-    });
-
-    return () => {
-      cancelled = true;
-      subscription.remove();
-    };
-  }, [day]);
-
-  // Group by sitting, not by log entry.
-  //
-  // Breakfast photographed as three separate plates is one breakfast, and the
-  // protein target belongs to the sitting. Judging each entry separately held a
-  // cup of coffee to the same 40 g target as the meal it came with.
-  const groups = useMemo(() => {
-    const byType = new Map();
-    for (const meal of meals) {
-      const list = byType.get(meal.mealType) ?? [];
-      list.push(meal);
-      byType.set(meal.mealType, list);
-    }
-    return MEAL_TYPES.filter((type) => byType.has(type)).map((type) => ({
-      type,
-      meals: byType.get(type),
-      totals: sumMeals(byType.get(type)),
-    }));
-  }, [meals]);
-
-  const totals = sumMeals(meals);
-  const bonus = activityBonus(profile, activeEnergy);
-  const budget = (targets.calories ?? 0) + bonus;
-  const remaining = budget - totals.calories;
-  const overBudget = remaining < 0;
-
-  function confirmDelete(meal) {
-    Alert.alert('Delete this meal?', meal.name, [
-      { text: 'Keep', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteMeal(user.uid, meal.id),
-      },
-    ]);
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Reading Apple Health…</Text>
+      </View>
+    );
   }
+
+  const sessionsToday = onDay(workouts, today);
+  const sessionsYesterday = onDay(workouts, addDays(today, -1));
+  const sleep = series?.sleep ?? [];
+  const lastNight = sleep.length ? sleep[sleep.length - 1] : null;
+  const nightIsRecent = lastNight && lastNight.date >= addDays(today, -1);
+  const resting = againstBaseline(series?.restingHeartRate);
+  const hrv = againstBaseline(series?.hrv);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.dayNav}>
-        <Pressable onPress={() => setDay(addDays(day, -1))} hitSlop={12}>
-          <Text style={styles.dayArrow}>‹</Text>
-        </Pressable>
-        <Text style={styles.dayLabel}>{formatDayLabel(day)}</Text>
-        <Pressable
-          onPress={() => setDay(addDays(day, 1))}
-          hitSlop={12}
-          disabled={isToday(day)}
-        >
-          <Text style={[styles.dayArrow, isToday(day) && styles.dayArrowDisabled]}>›</Text>
-        </Pressable>
-      </View>
+      <Text style={styles.title}>Today</Text>
+      <Text style={styles.subtitle}>{longDate()}</Text>
 
-      {targets.calories === null ? (
-        <Card>
-          <Empty
-            title="Set your targets first"
-            body="Noodle needs your height, weight and age to work out a calorie budget. It takes a minute, in Settings."
-          />
-        </Card>
+      {denied ? (
+        <Empty
+          title="Health access is off"
+          body="Open the Health app, then Sharing → Apps → Noodle, and turn Workouts, Sleep and Heart on."
+        />
+      ) : null}
+
+      {capturedAt ? (
+        <Text style={styles.syncNote}>
+          Synced from your iPhone {describeAge(capturedAt)}. Open Noodle there to refresh.
+        </Text>
+      ) : null}
+
+      {!healthSupported && !series && !workouts.length ? (
+        <Empty
+          title="Nothing synced yet"
+          body="Apple Health only exists on iOS. Open Noodle on your iPhone once and it will mirror everything here."
+        />
+      ) : null}
+
+      <Text style={styles.sectionHeading}>Workouts</Text>
+      {sessionsToday.length ? (
+        sessionsToday.map((workout) => <WorkoutCard key={workout.id} workout={workout} />)
       ) : (
-        <Card style={styles.budgetCard}>
-          <Text style={[styles.remaining, overBudget && { color: colors.over }]}>
-            {Math.abs(Math.round(remaining))}
+        <Card>
+          <Text style={styles.restTitle}>Nothing yet today</Text>
+          <Text style={styles.restBody}>
+            {sessionsYesterday.length
+              ? `Yesterday: ${sessionsYesterday
+                  .map((w) => `${describeType(w.type).label.toLowerCase()} ${formatDuration(w.durationMin)}`)
+                  .join(', ')}.`
+              : 'A workout recorded on the watch, or logged in an app that writes to Health, shows up here.'}
           </Text>
-          <Text style={styles.remainingLabel}>
-            {overBudget ? 'calories over budget' : 'calories left today'}
-          </Text>
-          <Text style={styles.budgetDetail}>
-            {Math.round(totals.calories)} eaten of {Math.round(budget)}
-            {bonus > 0 ? ` (${targets.calories} + ${bonus} earned)` : ''}
-          </Text>
+        </Card>
+      )}
 
-          {activeEnergy !== null && activeEnergy > 0 ? (
-            <Text style={styles.activeEnergy}>
-              {Math.round(activeEnergy)} kcal active{isToday(day) ? ' today' : ''}
-              {bonus === 0 ? ' · not added to your budget' : ''}
+      <Text style={styles.sectionHeading}>Last night</Text>
+      {nightIsRecent ? (
+        <Card style={styles.heroCard}>
+          <Text style={styles.heroValue}>{formatHours(lastNight.value)}</Text>
+          <Text style={styles.heroUnit}>asleep</Text>
+          {lastNight.stages && lastNight.stages.deep + lastNight.stages.rem > 0 ? (
+            <Text style={styles.heroStages}>
+              {formatHours(lastNight.stages.deep)} deep · {formatHours(lastNight.stages.rem)} REM ·{' '}
+              {formatHours(lastNight.stages.core)} core
             </Text>
           ) : null}
-
-          <View style={styles.macros}>
-            <MacroBar
-              label="Protein"
-              value={totals.protein}
-              target={targets.protein}
-              color={colors.protein}
-            />
-            <MacroBar label="Carbs" value={totals.carbs} target={targets.carbs} color={colors.carbs} />
-            <MacroBar label="Fat" value={totals.fat} target={targets.fat} color={colors.fat} />
-          </View>
+          <BaselineLine
+            compare={againstBaseline(sleep)}
+            format={(h) => `${Math.round(Math.abs(h) * 60)} min`}
+            threshold={0.25}
+          />
+        </Card>
+      ) : (
+        <Card>
+          <Text style={styles.restTitle}>No sleep recorded</Text>
+          <Text style={styles.restBody}>
+            {lastNight
+              ? `The last night Health has is ${formatDayLabel(lastNight.date)}. The watch records sleep when it is worn overnight.`
+              : 'The watch records sleep when it is worn overnight.'}
+          </Text>
         </Card>
       )}
 
-      {isToday(day) ? (
-        <>
-          <Button title="Log a meal" onPress={onLogMeal} />
-          <View style={{ height: spacing.sm }} />
-          <Button title="What should I eat next?" variant="secondary" onPress={onOpenCoach} />
-        </>
-      ) : null}
+      <Text style={styles.sectionHeading}>This morning</Text>
+      <View style={styles.vitalsRow}>
+        <VitalCard
+          label="Resting HR"
+          unit="bpm"
+          compare={resting}
+          format={(v) => Math.round(v)}
+          threshold={2}
+        />
+        <VitalCard
+          label="HRV"
+          unit="ms"
+          compare={hrv}
+          format={(v) => Math.round(v)}
+          threshold={5}
+        />
+      </View>
 
-      {meals.length === 0 ? (
-        <>
-          <Text style={styles.sectionHeading}>Nothing logged</Text>
-          <Empty
-            title="No meals yet"
-            body={isToday(day) ? 'Photograph your next meal to start the day.' : 'Nothing was logged on this day.'}
-          />
-        </>
-      ) : (
-        groups.map((group) => {
-          const verdict = proteinVerdict(group, targets);
-          return (
-            <View key={group.type}>
-              <View style={styles.groupHeader}>
-                <Text style={styles.groupTitle}>{capitalise(group.type)}</Text>
-                <Text style={styles.groupTotals}>
-                  {Math.round(group.totals.calories)} kcal ·{' '}
-                  {Math.round(group.totals.protein)}p · {Math.round(group.totals.carbs)}c ·{' '}
-                  {Math.round(group.totals.fat)}f
-                </Text>
-              </View>
-              {verdict ? (
-                <Text style={[styles.proteinVerdict, { color: verdict.colour }]}>
-                  {verdict.text}
-                </Text>
-              ) : null}
-
-              {group.meals.map((meal) => (
-                <Pressable
-                  key={meal.id}
-                  onPress={() => onEditMeal(meal)}
-                  onLongPress={() => confirmDelete(meal)}
-                >
-                  <Card>
-                    <View style={styles.mealRow}>
-                      {meal.photoUrl ? (
-                        <Image source={{ uri: meal.photoUrl }} style={styles.mealPhoto} />
-                      ) : (
-                        <View style={[styles.mealPhoto, styles.mealPhotoEmpty]}>
-                          <Text style={styles.mealPhotoEmptyText}>🍽</Text>
-                        </View>
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <View style={styles.mealTitleRow}>
-                          <Text style={styles.mealName} numberOfLines={1}>
-                            {meal.name}
-                          </Text>
-                          <Text style={styles.mealCalories}>
-                            {Math.round(meal.totals.calories)}
-                          </Text>
-                        </View>
-                        <Text style={styles.mealMeta}>{formatTime(meal.loggedAt)}</Text>
-                        <Text style={styles.mealMacros}>
-                          {Math.round(meal.totals.protein)}p ·{' '}
-                          {Math.round(meal.totals.carbs)}c · {Math.round(meal.totals.fat)}f
-                        </Text>
-                      </View>
-                    </View>
-                  </Card>
-                </Pressable>
-              ))}
-            </View>
-          );
-        })
-      )}
-
-      {meals.length > 0 ? (
-        <Text style={styles.hint}>Tap a meal to correct it, or long-press to delete.</Text>
-      ) : null}
+      <Text style={styles.disclaimer}>
+        Compared only with your own last 30 days. Medication, travel and a new routine all move
+        these numbers, and Noodle does not know which is which. Anything that worries you is a
+        conversation with your doctor.
+      </Text>
     </ScrollView>
   );
 }
 
-/**
- * Whether a meal reached its own protein target.
- *
- * Shown per meal rather than only as a daily total because muscle protein synthesis
- * is triggered per meal — a day that hits 130 g across three even meals does more
- * than the same 130 g concentrated at dinner, and only a per-meal view shows the
- * difference.
- */
-function proteinVerdict(group, targets) {
-  const target = perMealProtein(targets, group.type);
-  if (!target) return null;
+function WorkoutCard({ workout }) {
+  const type = describeType(workout.type);
+  const pace = formatPace(workout.metres, workout.durationMin);
+  const details = [
+    formatDuration(workout.durationMin),
+    formatMiles(workout.metres),
+    pace,
+    workout.kcal ? `${workout.kcal} kcal` : null,
+  ].filter(Boolean);
 
-  const protein = group.totals?.protein ?? 0;
-  if (protein >= target) {
-    return { text: `✓ ${Math.round(protein)}g protein — target met`, colour: colors.primary };
-  }
-  return {
-    text: `${Math.round(target - protein)}g short of the ${target}g target`,
-    colour: colors.accent,
-  };
+  return (
+    <Card style={styles.workoutCard}>
+      <Text style={styles.workoutIcon}>{type.icon}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.workoutTitle}>{type.label}</Text>
+        <Text style={styles.workoutMeta}>
+          {formatTime(workout.start)}
+          {workout.source ? ` · ${workout.source}` : ''}
+        </Text>
+        <Text style={styles.workoutDetails}>{details.join(' · ')}</Text>
+      </View>
+      {workout.avgHr ? (
+        <View style={styles.hrBlock}>
+          <Text style={styles.hrValue}>{workout.avgHr}</Text>
+          <Text style={styles.hrLabel}>avg bpm</Text>
+          {workout.maxHr ? <Text style={styles.hrLabel}>max {workout.maxHr}</Text> : null}
+        </View>
+      ) : null}
+    </Card>
+  );
 }
 
-function capitalise(text) {
-  return (text ?? '').charAt(0).toUpperCase() + (text ?? '').slice(1);
+function VitalCard({ label, unit, compare, format, threshold }) {
+  return (
+    <Card style={styles.vitalCard}>
+      <Text style={styles.vitalLabel}>{label}</Text>
+      {compare ? (
+        <>
+          <Text style={styles.vitalValue}>
+            {format(compare.value)}
+            <Text style={styles.vitalUnit}> {unit}</Text>
+          </Text>
+          <Text style={styles.vitalDate}>{formatDayLabel(compare.date)}</Text>
+          <BaselineLine compare={compare} format={format} threshold={threshold} />
+        </>
+      ) : (
+        <Text style={styles.vitalEmpty}>No reading yet</Text>
+      )}
+    </Card>
+  );
+}
+
+/** "3 above your 30-day average", or quiet when the difference is within noise. */
+function BaselineLine({ compare, format, threshold }) {
+  if (!compare || compare.baseline == null) return null;
+  const change = compare.change;
+  if (Math.abs(change) < threshold) {
+    return <Text style={styles.baseline}>About your 30-day average</Text>;
+  }
+  return (
+    <Text style={styles.baseline}>
+      {format(Math.abs(change))} {change > 0 ? 'above' : 'below'} your 30-day average
+    </Text>
+  );
+}
+
+function longDate() {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  loadingText: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.md },
 
-  dayNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
+  subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md },
+  syncNote: {
+    fontSize: fonts.tiny,
+    color: colors.accent,
+    fontWeight: '600',
     marginBottom: spacing.md,
+    lineHeight: 17,
   },
-  dayLabel: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
-  dayArrow: { fontSize: 34, color: colors.primary, paddingHorizontal: spacing.md, lineHeight: 38 },
-  dayArrowDisabled: { color: colors.line },
-
-  budgetCard: { alignItems: 'center', paddingVertical: spacing.xl },
-  remaining: { fontSize: 64, fontWeight: '800', color: colors.primary, lineHeight: 70 },
-  remainingLabel: {
-    fontSize: fonts.small,
-    color: colors.inkSoft,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  budgetDetail: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.sm },
-  activeEnergy: { fontSize: fonts.tiny, color: colors.accent, marginTop: spacing.xs, fontWeight: '600' },
-  macros: { width: '100%', marginTop: spacing.xl },
 
   sectionHeading: {
     fontSize: fonts.small,
@@ -287,29 +235,46 @@ const styles = StyleSheet.create({
     color: colors.inkSoft,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
 
-  mealRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  mealPhoto: { width: 60, height: 60, borderRadius: radius - 4 },
-  mealPhotoEmpty: { backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
-  mealPhotoEmptyText: { fontSize: 26 },
-  mealTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  mealName: { fontSize: fonts.body, fontWeight: '700', color: colors.ink, flex: 1 },
-  mealCalories: { fontSize: fonts.body, fontWeight: '700', color: colors.primary, marginLeft: spacing.sm },
-  mealMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
-  mealMacros: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.xs },
-  proteinVerdict: { fontSize: fonts.small, fontWeight: '700', marginBottom: spacing.sm },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  groupTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
-  groupTotals: { fontSize: fonts.small, color: colors.inkSoft },
+  restTitle: { fontSize: fonts.body, fontWeight: '700', color: colors.ink },
+  restBody: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.xs, lineHeight: 20 },
 
-  hint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'center', marginTop: spacing.md },
+  workoutCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  workoutIcon: { fontSize: 30 },
+  workoutTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
+  workoutMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
+  workoutDetails: { fontSize: fonts.small, color: colors.ink, marginTop: spacing.xs },
+  hrBlock: { alignItems: 'flex-end' },
+  hrValue: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
+  hrLabel: { fontSize: fonts.tiny, color: colors.inkSoft },
+
+  heroCard: { alignItems: 'center', paddingVertical: spacing.xl },
+  heroValue: { fontSize: 52, fontWeight: '800', color: colors.ink, lineHeight: 58 },
+  heroUnit: {
+    fontSize: fonts.small,
+    color: colors.inkSoft,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  heroStages: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm },
+
+  vitalsRow: { flexDirection: 'row', gap: spacing.md },
+  vitalCard: { flex: 1 },
+  vitalLabel: { fontSize: fonts.small, fontWeight: '700', color: colors.inkSoft },
+  vitalValue: { fontSize: fonts.hero, fontWeight: '800', color: colors.ink, marginTop: spacing.xs },
+  vitalUnit: { fontSize: fonts.small, fontWeight: '600', color: colors.inkSoft },
+  vitalDate: { fontSize: fonts.tiny, color: colors.inkSoft },
+  vitalEmpty: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.sm },
+  baseline: { fontSize: fonts.tiny, color: colors.ink, marginTop: spacing.sm, lineHeight: 17 },
+
+  disclaimer: {
+    fontSize: fonts.tiny,
+    color: colors.inkSoft,
+    lineHeight: 18,
+    marginTop: spacing.xl,
+    textAlign: 'center',
+  },
 });

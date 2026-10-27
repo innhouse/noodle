@@ -2,15 +2,12 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Meal photos, one folder per user. Capped at 8 MB so a bug or a bad actor
-    // cannot fill the bucket, and restricted to images so the path cannot be used
-    // as general file hosting.
+    // Meal photos from Noodle's food-tracking days, one folder per user. Nothing
+    // writes here any more; the rule exists so the owner can list and delete what
+    // is left, and so nobody else can.
     match /users/{uid}/meals/{photo} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if request.auth != null
-                   && request.auth.uid == uid
-                   && request.resource.size < 8 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if false;
     }
   }
 }

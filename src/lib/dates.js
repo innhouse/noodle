@@ -1,7 +1,7 @@
 /**
  * Day keys are local-time YYYY-MM-DD strings, not UTC timestamps.
- * A meal eaten at 11pm belongs to that day for the person eating it, and using
- * UTC would push late dinners into tomorrow for anyone west of Greenwich.
+ * A workout at 11pm belongs to that day for the person doing it, and using
+ * UTC would push it into tomorrow for anyone west of Greenwich.
  */
 
 export function dayKey(date = new Date()) {
@@ -35,14 +35,3 @@ export function formatTime(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
-
-/** Which meal the clock suggests, used to pre-fill the picker. */
-export function guessMealType(date = new Date()) {
-  const hour = date.getHours();
-  if (hour < 11) return 'breakfast';
-  if (hour < 16) return 'lunch';
-  if (hour < 21) return 'dinner';
-  return 'snack';
-}
-
-export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];

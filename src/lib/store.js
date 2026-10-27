@@ -1,26 +1,29 @@
 /**
- * Firestore + Cloud Functions data layer.
+ * Firestore data layer.
  *
  * Layout, all scoped under the signed-in user so the security rules stay a one-liner:
- *   users/{uid}                      profile and targets
- *   users/{uid}/meals/{mealId}       one logged meal, with its items and answers
- *   users/{uid}/weights/{YYYY-MM-DD} one scale reading
+ *   users/{uid}                       profile and preferences
+ *   users/{uid}/weights/{YYYY-MM-DD}  one scale reading
+ *   users/{uid}/workouts/{uuid}       one session, mirrored from Apple Health
+ *   users/{uid}/health/snapshot       daily series mirrored from Apple Health
+ *
+ * Apple Health stays the source of truth for everything mirrored here. The copies
+ * exist so the web app can show the same numbers, and they are stamped with when
+ * they were taken so a stale copy is never mistaken for a live one.
  */
 import {
   collection,
-  deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   setDoc,
-  where,
   writeBatch,
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, listAll, ref } from 'firebase/storage';
 
-import { db, functions, storage } from './firebase';
+import { db, storage } from './firebase';
 
 // --- Profile ---------------------------------------------------------------
 
@@ -34,60 +37,6 @@ export function watchProfile(uid, callback) {
 
 export function saveProfile(uid, profile) {
   return setDoc(doc(db, 'users', uid), profile, { merge: true });
-}
-
-// --- Meals -----------------------------------------------------------------
-
-export function watchMeals(uid, day, callback) {
-  const q = query(
-    collection(db, 'users', uid, 'meals'),
-    where('dayKey', '==', day),
-    orderBy('loggedAt', 'asc')
-  );
-  return onSnapshot(
-    q,
-    (snapshot) => callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))),
-    (error) => console.warn('meals watch failed', error)
-  );
-}
-
-/** Recent meals across all days, for the "log this again" shortcut. */
-export function watchRecentMeals(uid, callback, max = 40) {
-  const q = query(collection(db, 'users', uid, 'meals'), orderBy('loggedAt', 'desc'));
-  return onSnapshot(
-    q,
-    (snapshot) => callback(snapshot.docs.slice(0, max).map((d) => ({ id: d.id, ...d.data() }))),
-    (error) => console.warn('recent meals watch failed', error)
-  );
-}
-
-/**
- * Recursively replace undefined with null.
- *
- * Firestore rejects undefined outright rather than skipping the field, so a meal
- * saved by an older build — missing fields that later versions write — fails to
- * save the moment it is edited. Normalising here means every write is safe rather
- * than every call site having to remember.
- */
-function withoutUndefined(value) {
-  if (value === undefined) return null;
-  if (Array.isArray(value)) return value.map(withoutUndefined);
-  if (value && typeof value === 'object' && !(value instanceof Date)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, inner]) => [key, withoutUndefined(inner)])
-    );
-  }
-  return value;
-}
-
-export function saveMeal(uid, meal) {
-  const id = meal.id ?? doc(collection(db, 'users', uid, 'meals')).id;
-  const payload = withoutUndefined({ ...meal, id });
-  return setDoc(doc(db, 'users', uid, 'meals', id), payload, { merge: true }).then(() => id);
-}
-
-export function deleteMeal(uid, mealId) {
-  return deleteDoc(doc(db, 'users', uid, 'meals', mealId));
 }
 
 // --- Weight ----------------------------------------------------------------
@@ -123,47 +72,43 @@ export async function saveWeights(uid, entries, source = 'health') {
   }
 }
 
-// --- Photos ----------------------------------------------------------------
+// --- Workouts --------------------------------------------------------------
 
-export async function uploadMealPhoto(uid, mealId, blob) {
-  const path = `users/${uid}/meals/${mealId}.jpg`;
-  await uploadBytes(ref(storage, path), blob, { contentType: 'image/jpeg' });
-  return getDownloadURL(ref(storage, path));
+export function watchWorkouts(uid, callback) {
+  const q = query(collection(db, 'users', uid, 'workouts'), orderBy('start', 'desc'));
+  return onSnapshot(
+    q,
+    (snapshot) => callback(snapshot.docs.map((d) => d.data())),
+    (error) => console.warn('workouts watch failed', error)
+  );
 }
 
-// --- Cloud Functions -------------------------------------------------------
-
-/** `images` is an array of { base64, mimeType } — one meal, one or more photos. */
-export async function analyzeMealPhoto({ images, mealType, hint }) {
-  const call = httpsCallable(functions, 'analyzeMeal', { timeout: 120_000 });
-  const result = await call({ images, mealType, hint });
-  return result.data;
-}
-
-export async function reviewMeals({ meals, targets, days }) {
-  const call = httpsCallable(functions, 'reviewMeals', { timeout: 120_000 });
-  const result = await call({ meals, targets, days });
-  return result.data.text;
+/**
+ * Mirror sessions from Apple Health, keyed by Health's own UUID so a re-read
+ * updates a session in place rather than duplicating it.
+ */
+export async function saveWorkouts(uid, workouts) {
+  const capturedAt = new Date().toISOString();
+  for (let i = 0; i < workouts.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const workout of workouts.slice(i, i + 400)) {
+      batch.set(doc(db, 'users', uid, 'workouts', workout.id), { ...workout, capturedAt });
+    }
+    await batch.commit();
+  }
 }
 
 // --- Health snapshot -------------------------------------------------------
 
-// Ninety days is what every trend and association on the Health screen reads, and
-// capping the window here is also what keeps the document small: thirty metrics at
-// ninety points measures about 99 KB against Firestore's 1 MiB limit, so there is
-// an order of magnitude of headroom without needing to shed anything.
+// Ninety days is what every trend on the Health screen reads, and capping the
+// window here is also what keeps the document small: thirty metrics at ninety
+// points measures about 99 KB against Firestore's 1 MiB limit.
 const SNAPSHOT_DAYS = 90;
 
 /**
- * Mirror the phone's Apple Health readings into Firestore so the web app can show
- * them.
- *
- * This is the one place health data leaves the phone, and it is a copy rather than
- * a source of truth — HealthKit stays authoritative, and the web shows this with the
- * date it was captured so a stale copy is never mistaken for a live one.
- *
- * Values are rounded to two decimals: nothing here is meaningful past that, and it
- * roughly halves what gets stored and shipped.
+ * Mirror the phone's daily Apple Health series into Firestore so the web app can
+ * show them. Values are rounded to two decimals: nothing here is meaningful past
+ * that, and it roughly halves what gets stored and shipped.
  */
 export function saveHealthSnapshot(uid, series) {
   const round = (value) => Math.round(value * 100) / 100;
@@ -200,14 +145,33 @@ export function watchHealthSnapshot(uid, callback) {
   );
 }
 
-export async function askCoach({ totals, targets, meals, question }) {
-  const call = httpsCallable(functions, 'coachMeal', { timeout: 60_000 });
-  const result = await call({
-    totals,
-    targets,
-    meals,
-    question,
-    localTime: new Date().toLocaleString(),
-  });
-  return result.data.text;
+// --- Retired data ----------------------------------------------------------
+
+/**
+ * Remove everything the food-tracking era left behind: logged meals and their
+ * photos. One-shot, run from Settings, and safe to run again — a second pass
+ * finds nothing and deletes nothing.
+ *
+ * Returns how many meals and photos went, so the screen can say so.
+ */
+export async function deleteMealData(uid) {
+  const meals = await getDocs(collection(db, 'users', uid, 'meals'));
+  for (let i = 0; i < meals.docs.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const meal of meals.docs.slice(i, i + 400)) batch.delete(meal.ref);
+    await batch.commit();
+  }
+
+  let photos = 0;
+  try {
+    const listing = await listAll(ref(storage, `users/${uid}/meals`));
+    for (const item of listing.items) {
+      await deleteObject(item);
+      photos += 1;
+    }
+  } catch (error) {
+    console.warn('meal photo cleanup failed', error);
+  }
+
+  return { meals: meals.docs.length, photos };
 }

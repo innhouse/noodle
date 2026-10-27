@@ -1,7 +1,11 @@
 # Noodle
 
-Personal food tracker. Photograph a meal, Claude reads it, USDA prices the
-nutrition, dropdowns correct what the photo couldn't show.
+Personal training and recovery log, fed entirely by Apple Health: workouts
+(including ones other apps such as Jefit write to Health), sleep, resting heart
+rate, HRV and weight, compared only against the same person's earlier readings.
+
+It used to be a food tracker. That code is gone; the only trace is the one-shot
+"Delete meal data" action in Settings that clears what the old version stored.
 
 ## Expo has changed
 
@@ -14,29 +18,33 @@ recent SDKs — `expo-image-manipulator` in particular is now the contextual
 
 - `App.js` — tab shell and overlay routing. No navigation library; the app is
   small enough that a `useState` switch beats the dependency.
-- `src/lib/nutrition.js` — every calculation. Pure and synchronous, because the
-  confirm screen recomputes totals on each dropdown change and none of that
-  should touch the network.
+- `src/lib/useHealthData.js` — the one place HealthKit is read. On the phone it
+  reads and mirrors to Firestore; on web it reads the mirror. Every screen that
+  shows health data goes through it.
+- `src/lib/health.ios.js` / `health.js` — HealthKit reads and the no-op stubs
+  Metro picks on web. Read-only by design; Noodle never writes to Health.
+- `src/lib/workouts.js`, `healthMetrics.js`, `weight.js` — pure labels and
+  arithmetic, shared by phone and web.
 - `src/lib/firebase.js` / `.web.js` — platform split. `getReactNativePersistence`
   exists only in Firebase's React Native build, so importing it on web breaks the
   bundle. Metro resolves `.web.js` automatically.
-- `functions/` — Cloud Functions. The Anthropic key lives here and only here;
-  anything in the Expo bundle is readable by anyone who installs the app.
 
-## The division of labour that matters
+## What the app is entitled to say
 
-Claude estimates **identity and weight**. USDA supplies **nutrition**. Do not
-collapse these — asking the model for calories directly makes the same meal
-score differently on different days, which destroys the point of tracking.
+Nothing here diagnoses. There are no normal ranges; every comparison is the
+person's own last few weeks. A resting heart rate on a beta-blocker, a pace
+after a layoff — shown as recorded, never judged. Keep it that way.
 
-`fallbackPer100g` in the schema exists for foods USDA has no entry for. The UI
-labels those as estimates rather than silently mixing them in with database
-figures.
+HealthKit has no fields for sets, reps or weight lifted, so a strength session
+is a duration and a heart-rate trace. Per-lift detail would need Jefit's CSV
+export, which is not wired up.
 
 ## Conventions
 
 - Single quotes, no semicolon-free style — match the existing files.
-- Day keys are local-time `YYYY-MM-DD`, never UTC. A meal at 11pm belongs to
-  that day for the person eating it.
-- Model is `claude-opus-5`. Structured outputs via `output_config.format`.
-  Thinking is on by default on this model and counts against `max_tokens`.
+- Day keys are local-time `YYYY-MM-DD`, never UTC.
+- Web is published three ways: GitHub Pages (via `.github/workflows/pages.yml`,
+  base path `/noodle`), EAS Hosting and Firebase Hosting. `app.config.js` adds
+  the base path only when the Pages workflow asks for it.
+- Phone updates ship with `npx eas update --channel production`; no store build
+  needed for JS-only changes.
