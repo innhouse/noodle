@@ -18,6 +18,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -197,6 +198,18 @@ export function watchHealthSnapshot(uid, callback) {
  *
  * Returns how many meals and photos went, so the screen can say so.
  */
+/** Whether anything from the food-tracking era is still in the account. */
+export async function hasMealData(uid) {
+  const meals = await getDocs(query(collection(db, 'users', uid, 'meals'), limit(1)));
+  if (!meals.empty) return true;
+  try {
+    const listing = await listAll(ref(storage, `users/${uid}/meals`));
+    return listing.items.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function deleteMealData(uid) {
   const meals = await getDocs(collection(db, 'users', uid, 'meals'));
   for (let i = 0; i < meals.docs.length; i += 400) {

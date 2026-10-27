@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { healthSupported } from '../lib/health';
-import { deleteMealData } from '../lib/store';
+import { deleteMealData, hasMealData } from '../lib/store';
 import {
   cmToFeetInches,
   displayLb,
@@ -27,6 +27,7 @@ export default function SettingsScreen() {
   const [draft, setDraft] = useState({});
   const [saved, setSaved] = useState(false);
   const [cleanup, setCleanup] = useState(null);
+  const [leftovers, setLeftovers] = useState(false);
 
   useEffect(() => {
     const height = cmToFeetInches(profile?.heightCm);
@@ -38,6 +39,19 @@ export default function SettingsScreen() {
       inches: height.inches,
     });
   }, [profile]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    hasMealData(user.uid)
+      .then((any) => {
+        if (!cancelled) setLeftovers(any);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   function set(patch) {
     setDraft((previous) => ({ ...previous, ...patch }));
@@ -143,6 +157,7 @@ export default function SettingsScreen() {
 
       <Button title={saved ? 'Saved' : 'Save'} onPress={save} />
 
+      {leftovers || cleanup?.done ? (
       <Card style={styles.cleanupCard}>
         <Text style={styles.cardTitle}>Old meal data</Text>
         <Text style={styles.cardBody}>
@@ -166,6 +181,7 @@ export default function SettingsScreen() {
           <Text style={styles.cleanupResult}>That didn’t work. Try again in a moment.</Text>
         ) : null}
       </Card>
+      ) : null}
 
       <View style={{ height: spacing.xl }} />
       <Text style={styles.account}>Signed in as {user?.email}</Text>
