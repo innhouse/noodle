@@ -29,10 +29,10 @@ export default function WeightScreen() {
 
   // Pull every weigh-in Health holds that the log doesn't, once per visit.
   //
-  // Waits for the first snapshot so it knows where the log ends, then asks Health
-  // for everything after that day. Readings already logged by hand are left alone
-  // unless Health has a different number for the same day — the scale is the
-  // better witness than memory.
+  // Waits for the first snapshot so it knows what is already logged, then asks
+  // Health for the past year and adds any day the log is missing. Days already
+  // logged are left exactly as they are, so a reading corrected by hand stays
+  // corrected, and gaps from before the import existed get filled in.
   const syncHealth = profile?.syncHealthWeight !== false;
   useEffect(() => {
     if (!healthSupported || !syncHealth || !user || !loaded || synced.current) return;
@@ -41,13 +41,10 @@ export default function WeightScreen() {
       if (!(await requestHealthAccess())) return;
 
       const last = entries[entries.length - 1]?.date;
-      const since = last ? new Date(`${last}T00:00:00`) : new Date(Date.now() - 365 * 86_400_000);
-      const samples = await weightSamplesSince(since);
+      const samples = await weightSamplesSince(new Date(Date.now() - 365 * 86_400_000));
 
-      const known = new Map(entries.map((e) => [e.date, e.weightKg]));
-      const fresh = samples.filter(
-        (s) => !known.has(s.date) || Math.abs(known.get(s.date) - s.weightKg) > 0.01
-      );
+      const known = new Set(entries.map((e) => e.date));
+      const fresh = samples.filter((s) => !known.has(s.date));
       if (fresh.length === 0) return;
 
       await saveWeights(user.uid, fresh);
