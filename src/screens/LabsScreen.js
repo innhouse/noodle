@@ -11,7 +11,6 @@ import {
   latestAndPrevious,
   markerByKey,
   markersWithData,
-  meetsTarget,
   outsideRange,
   rangeStatus,
 } from '../lib/labs';
@@ -20,33 +19,26 @@ import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Card, Empty, Field, Pill } from '../ui';
 
 /**
- * Blood tests, typed in from the report, against the person's own targets.
+ * Blood tests, typed in from the report, against the lab's normal range.
  *
- * Every number here came from a lab and every target from a cardiologist.
- * Noodle's only contribution is putting them side by side and keeping the
- * history, so the next appointment starts from "LDL went from 3.1 to 1.6"
- * rather than from memory.
+ * Every number here came from a lab. Noodle's only contribution is keeping the
+ * history and drawing it, so the next appointment starts from "LDL went from
+ * 5.1 to 1.6" rather than from memory.
  */
 export default function LabsScreen() {
-  const { user, profile, updateProfile } = useAuth();
+  const { user } = useAuth();
   const [tests, setTests] = useState([]);
-  const [mode, setMode] = useState(null); // null | 'entry' | 'targets' | 'paste'
+  const [mode, setMode] = useState(null); // null | 'entry' | 'paste'
   const [pasted, setPasted] = useState('');
   const [pasteResult, setPasteResult] = useState(null);
   const [open, setOpen] = useState(null);
   const [draft, setDraft] = useState({ date: dayKey(), values: {} });
-  const [targets, setTargets] = useState({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) return undefined;
     return watchLabs(user.uid, setTests);
   }, [user]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTargets(profile?.labTargets ?? {});
-  }, [profile]);
 
   const markers = useMemo(() => markersWithData(tests), [tests]);
 
@@ -74,21 +66,6 @@ export default function LabsScreen() {
     setSaving(true);
     try {
       await saveLabs(user.uid, draft.date, values);
-      setMode(null);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveTargets() {
-    const cleaned = {};
-    for (const [key, raw] of Object.entries(targets)) {
-      const number = Number(String(raw).replace(',', '.'));
-      if (raw !== '' && Number.isFinite(number)) cleaned[key] = number;
-    }
-    setSaving(true);
-    try {
-      await updateProfile({ labTargets: cleaned });
       setMode(null);
     } finally {
       setSaving(false);
@@ -188,34 +165,6 @@ export default function LabsScreen() {
     );
   }
 
-  if (mode === 'targets') {
-    return (
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Your targets</Text>
-        <Text style={styles.subtitle}>
-          The numbers your cardiologist gave you. Leave blank where there isn’t one.
-        </Text>
-        <Card>
-          {LAB_MARKERS.filter((m) => m.betterWhen).map((marker) => (
-            <Field
-              key={marker.key}
-              label={`${marker.label} (${marker.unit}) — ${
-                marker.betterWhen === 'lower' ? 'at or below' : 'at or above'
-              }`}
-              value={targets[marker.key] == null ? '' : String(targets[marker.key])}
-              onChangeText={(text) => setTargets((t) => ({ ...t, [marker.key]: text }))}
-              keyboardType="decimal-pad"
-              placeholder="—"
-              hint={marker.hint}
-            />
-          ))}
-        </Card>
-        <Button title="Save targets" onPress={saveTargets} loading={saving} />
-        <Button title="Cancel" variant="ghost" onPress={() => setMode(null)} />
-      </ScrollView>
-    );
-  }
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Labs</Text>
@@ -229,12 +178,6 @@ export default function LabsScreen() {
 
       <View style={styles.actions}>
         <Button title="Enter a test" onPress={() => startEntry(null)} style={{ flex: 1 }} />
-        <Button
-          title="Targets"
-          variant="secondary"
-          onPress={() => setMode('targets')}
-          style={{ flex: 1 }}
-        />
       </View>
       <Pressable onPress={() => setMode('paste')}>
         <Text style={styles.pasteLink}>Paste results as JSON</Text>
@@ -243,18 +186,16 @@ export default function LabsScreen() {
       {!tests.length ? (
         <Empty
           title="No results yet"
-          body="Enter the numbers from a lab report and they will show here against your targets, with the change since the previous test."
+          body="Enter the numbers from a lab report and they will show here against the lab’s normal range, with a chart once there is more than one."
         />
       ) : null}
 
       {markers.map((marker) => {
         const { latest, previous } = latestAndPrevious(tests, marker.key);
         const value = latest.values[marker.key];
-        const target = profile?.labTargets?.[marker.key];
-        const ok = meetsTarget(value, target, marker);
         const status = rangeStatus(value, marker.range);
         const flagged = status === 'high' || status === 'low';
-        const edge = ok === false || flagged ? colors.accent : status === 'in' || ok ? colors.primary : colors.line;
+        const edge = flagged ? colors.accent : status === 'in' ? colors.primary : colors.line;
         const change = previous ? value - previous.values[marker.key] : null;
         const expanded = open === marker.key;
         const history = historyFor(tests, marker.key);
@@ -266,20 +207,12 @@ export default function LabsScreen() {
                   <Text style={styles.rowLabel}>{marker.label}</Text>
                   <Text style={styles.rowMeta}>
                     {formatDayLabel(latest.date)}
-                    {formatRange(marker.range) ? ` · lab range ${formatRange(marker.range)}` : ''}
-                    {target != null
-                      ? ` · your target ${marker.betterWhen === 'lower' ? '≤' : '≥'} ${target}`
-                      : ''}
+                    {formatRange(marker.range) ? ` · normal ${formatRange(marker.range)} ${marker.unit}` : ''}
                   </Text>
                   <View style={styles.pillRow}>
                     {status ? (
                       <Pill tone={status === 'in' ? 'good' : 'warn'}>
-                        {status === 'in' ? 'In lab range' : status === 'high' ? 'Above lab range' : 'Below lab range'}
-                      </Pill>
-                    ) : null}
-                    {ok != null ? (
-                      <Pill tone={ok ? 'good' : 'warn'}>
-                        {ok ? 'Target met' : marker.betterWhen === 'lower' ? 'Above target' : 'Below target'}
+                        {status === 'in' ? 'Normal' : status === 'high' ? 'High' : 'Low'}
                       </Pill>
                     ) : null}
                   </View>
@@ -304,7 +237,7 @@ export default function LabsScreen() {
                   <Text
                     style={[
                       styles.rowValue,
-                      (ok === false || flagged) && { color: colors.accent },
+                      flagged && { color: colors.accent },
                     ]}
                   >
                     {formatLab(value, marker)}
@@ -314,7 +247,7 @@ export default function LabsScreen() {
               </View>
 
               {history.length > 1 ? (
-                <LabChart marker={marker} points={history} target={target} />
+                <LabChart marker={marker} points={history} />
               ) : null}
 
               {expanded ? (
@@ -363,10 +296,10 @@ export default function LabsScreen() {
       ) : null}
 
       <Text style={styles.disclaimer}>
-        Results as the lab reported them. “Lab range” is the laboratory’s usual interval for adults
-        and is not a goal; your target is whatever your care team set, and after a heart attack it
-        is usually well inside the lab range. Orange marks a value outside the range or short of
-        your target; what to do about it is their call.
+        Results as the lab reported them, against the laboratory’s usual interval for adults.
+        “Normal” here means inside that interval, not that it is where your care team wants it —
+        after a heart attack the LDL they aim for sits well inside the normal range. What to do
+        about any of it is their call.
       </Text>
     </ScrollView>
   );
@@ -375,11 +308,12 @@ export default function LabsScreen() {
 /**
  * One marker over time, as a lollipop chart.
  *
- * Shaded band: the lab's reference interval. Dashed line: the person's own target.
- * Dots: results, green inside the lab range and orange outside. Drawn with plain
+ * Shaded band: the lab's reference interval. Dots: results, green inside it and
+ * orange outside. Thin grey line: the least-squares trend through them, once
+ * there are three or more. Drawn with plain
  * views so phone and web render it identically with nothing native to install.
  */
-function LabChart({ marker, points, target }) {
+function LabChart({ marker, points }) {
   const [width, setWidth] = useState(0);
   const height = 150;
   const padTop = 22;
@@ -393,7 +327,6 @@ function LabChart({ marker, points, target }) {
   const candidates = [...values];
   if (marker.range?.low != null) candidates.push(marker.range.low);
   if (marker.range?.high != null) candidates.push(marker.range.high);
-  if (target != null) candidates.push(Number(target));
   let min = Math.min(...candidates);
   let max = Math.max(...candidates);
   if (min === max) {
@@ -414,6 +347,38 @@ function LabChart({ marker, points, target }) {
   const t1 = dayOf(points[points.length - 1].date);
   const plotW = Math.max(0, width - padX * 2);
   const xFor = (key) => padX + (t1 === t0 ? plotW / 2 : ((dayOf(key) - t0) / (t1 - t0)) * plotW);
+
+  // Least-squares line through the results, clipped to the plot's vertical extent.
+  let trend = null;
+  if (points.length >= 3 && plotW > 0 && t1 > t0) {
+    const xs = points.map((p) => xFor(p.date));
+    const ys = points.map((p) => yFor(p.value));
+    const n = xs.length;
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < n; i += 1) {
+      num += (xs[i] - mx) * (ys[i] - my);
+      den += (xs[i] - mx) ** 2;
+    }
+    if (den > 0) {
+      const slope = num / den;
+      const clamp = (y) => Math.min(padTop + plotH, Math.max(padTop, y));
+      const x0 = xs[0];
+      const x1 = xs[n - 1];
+      const y0 = clamp(my + slope * (x0 - mx));
+      const y1 = clamp(my + slope * (x1 - mx));
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      trend = {
+        length: Math.hypot(dx, dy),
+        angle: Math.atan2(dy, dx),
+        cx: (x0 + x1) / 2,
+        cy: (y0 + y1) / 2,
+      };
+    }
+  }
 
   const bandTop = marker.range?.high != null ? yFor(marker.range.high) : padTop;
   const bandBottom = marker.range?.low != null ? yFor(marker.range.low) : padTop + plotH;
@@ -436,16 +401,21 @@ function LabChart({ marker, points, target }) {
           ) : null}
           {marker.range ? (
             <Text style={[styles.bandLabel, { top: bandTop - 14, right: padX }]}>
-              lab range {formatRange(marker.range)}
+              normal {formatRange(marker.range)}
             </Text>
           ) : null}
-          {target != null ? (
-            <>
-              <View style={[styles.targetLine, { top: yFor(Number(target)), left: padX, width: plotW }]} />
-              <Text style={[styles.targetLabel, { top: yFor(Number(target)) - 14, left: padX }]}>
-                target {target}
-              </Text>
-            </>
+          {trend ? (
+            <View
+              style={[
+                styles.trend,
+                {
+                  width: trend.length,
+                  left: trend.cx - trend.length / 2,
+                  top: trend.cy,
+                  transform: [{ rotate: `${trend.angle}rad` }],
+                },
+              ]}
+            />
           ) : null}
           <View style={[styles.axis, { top: baseline, left: padX, width: plotW }]} />
           {points.map((point) => {
@@ -513,9 +483,8 @@ const styles = StyleSheet.create({
   chart: { width: '100%', marginTop: spacing.md, overflow: 'hidden' },
   band: { position: 'absolute', backgroundColor: colors.primarySoft, borderRadius: 4 },
   bandLabel: { position: 'absolute', fontSize: 10, color: colors.primary, fontWeight: '600' },
-  targetLine: { position: 'absolute', height: 0, borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.ink },
-  targetLabel: { position: 'absolute', fontSize: 10, color: colors.ink, fontWeight: '600' },
   axis: { position: 'absolute', height: 1, backgroundColor: colors.line },
+  trend: { position: 'absolute', height: 2, backgroundColor: colors.inkSoft, opacity: 0.45, borderRadius: 1 },
   stem: { position: 'absolute', width: 2, opacity: 0.5 },
   dot: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.card },
   dotLabel: { position: 'absolute', width: 48, textAlign: 'center', fontSize: 10, fontWeight: '700', color: colors.ink },

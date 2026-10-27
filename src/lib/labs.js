@@ -3,17 +3,13 @@
  *
  * Canadian units throughout (mmol/L for lipids and glucose).
  *
- * Two different lines per marker, kept apart on purpose:
- *   `range`  — the lab's own reference interval, as printed on the report (LifeLabs
- *              BC, adult). Says whether a result is outside what the lab calls
- *              usual. It is not a goal.
- *   target   — the person's own, set from what their cardiologist told them.
- *              Noodle ships none, because the right LDL after a heart attack is
- *              far below the lab's "normal" and this app has no business deciding.
+ * `range` is the lab's own reference interval, as printed on the report (LifeLabs
+ * BC, adult). It says whether a result is outside what the lab calls usual. It is
+ * not a goal: after a heart attack the LDL a care team aims for sits well inside
+ * the "normal" range, and what to aim for is theirs to say, not this app's.
  */
 export const LAB_MARKERS = [
-  { key: 'ldl', label: 'LDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: 1.5, high: 3.4 },
-    hint: 'Canadian guidelines after a heart attack usually aim below 1.8 mmol/L — your team sets yours.' },
+  { key: 'ldl', label: 'LDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: 1.5, high: 3.4 } },
   { key: 'nonHdl', label: 'Non-HDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: null },
   { key: 'hdl', label: 'HDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'higher', range: { low: 0.99, high: null } },
   { key: 'triglycerides', label: 'Triglycerides', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: null, high: 2.21 } },
@@ -51,12 +47,6 @@ export function latestAndPrevious(tests, key) {
     .filter((t) => t.values?.[key] != null)
     .sort((a, b) => b.date.localeCompare(a.date));
   return { latest: withValue[0] ?? null, previous: withValue[1] ?? null };
-}
-
-/** Whether a value meets the person's own target, or null when there is no target. */
-export function meetsTarget(value, target, marker) {
-  if (value == null || target == null || target === '' || !marker.betterWhen) return null;
-  return marker.betterWhen === 'lower' ? value <= target : value >= target;
 }
 
 /** "1.50–3.40", "≥ 60", "< 2.21" — the lab's interval in words. */
