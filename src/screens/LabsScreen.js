@@ -308,9 +308,10 @@ export default function LabsScreen() {
 /**
  * One marker over time, as a lollipop chart.
  *
- * Shaded band: the lab's reference interval. Dots: results, green inside it and
- * orange outside. Thin grey line: the least-squares trend through them, once
- * there are three or more. Drawn with plain
+ * Green band: the lab's reference interval. Orange above or below it: the
+ * abnormal side, always kept on screen so the contrast exists even when every
+ * result is normal. Dots: results, coloured by which zone they land in. Thin
+ * grey line: the least-squares trend through them, once there are three. Drawn with plain
  * views so phone and web render it identically with nothing native to install.
  */
 function LabChart({ marker, points }) {
@@ -334,7 +335,12 @@ function LabChart({ marker, points }) {
     min -= 1;
     max += 1;
   }
-  const pad = (max - min) * 0.12;
+  // Always leave visible room on the abnormal side of each bound, so the orange
+  // zone exists on screen even when every result is normal.
+  const span = max - min || 1;
+  if (marker.range?.high != null) max = Math.max(max, marker.range.high + span * 0.25);
+  if (marker.range?.low != null) min = Math.min(min, marker.range.low - span * 0.25);
+  const pad = (max - min) * 0.1;
   min -= pad;
   max += pad;
   if (min < 0 && Math.min(...candidates) >= 0) min = 0;
@@ -404,6 +410,22 @@ function LabChart({ marker, points }) {
     >
       {width > 0 ? (
         <>
+          {marker.range?.high != null ? (
+            <View
+              style={[
+                styles.outBand,
+                { top: padTop, height: Math.max(0, bandTop - padTop), left: padLeft, width: plotW },
+              ]}
+            />
+          ) : null}
+          {marker.range?.low != null ? (
+            <View
+              style={[
+                styles.outBand,
+                { top: bandBottom, height: Math.max(0, baseline - bandBottom), left: padLeft, width: plotW },
+              ]}
+            />
+          ) : null}
           {marker.range ? (
             <View
               style={[
@@ -414,6 +436,12 @@ function LabChart({ marker, points }) {
           ) : null}
           {marker.range ? (
             <Text style={[styles.bandLabel, { top: bandTop + 3, right: padRight + 4 }]}>normal</Text>
+          ) : null}
+          {marker.range?.high != null ? (
+            <Text style={[styles.outLabel, { top: padTop + 2, right: padRight + 4 }]}>high</Text>
+          ) : null}
+          {marker.range?.low != null ? (
+            <Text style={[styles.outLabel, { top: baseline - 14, right: padRight + 4 }]}>low</Text>
           ) : null}
           {guides.map((g) => (
             <View key={g.v}>
@@ -510,7 +538,9 @@ const styles = StyleSheet.create({
   guideStrong: { backgroundColor: colors.primary, opacity: 0.35 },
   yLabel: { position: 'absolute', left: 0, textAlign: 'right', fontSize: 10, color: colors.inkSoft },
   yLabelStrong: { color: colors.primary, fontWeight: '700' },
-  band: { position: 'absolute', backgroundColor: colors.primarySoft, borderRadius: 4 },
+  band: { position: 'absolute', backgroundColor: colors.primarySoft },
+  outBand: { position: 'absolute', backgroundColor: colors.accentSoft, opacity: 0.8 },
+  outLabel: { position: 'absolute', fontSize: 10, color: colors.accent, fontWeight: '600' },
   bandLabel: { position: 'absolute', fontSize: 10, color: colors.primary, fontWeight: '600' },
   axis: { position: 'absolute', height: 1, backgroundColor: colors.line },
   trend: { position: 'absolute', height: 2, backgroundColor: colors.inkSoft, opacity: 0.45, borderRadius: 1 },
