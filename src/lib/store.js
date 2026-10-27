@@ -15,6 +15,7 @@ import {
   query,
   setDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -104,6 +105,22 @@ export function saveWeight(uid, date, weightKg) {
   // Keyed by date, so logging twice in a day corrects the reading instead of
   // adding a second point and skewing the trend.
   return setDoc(doc(db, 'users', uid, 'weights', date), { date, weightKg });
+}
+
+/**
+ * Write several readings at once, tagged with where they came from.
+ *
+ * Used by the Apple Health import. Firestore batches are capped at 500 writes, so
+ * a first import of years of scale history is chunked.
+ */
+export async function saveWeights(uid, entries, source = 'health') {
+  for (let i = 0; i < entries.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const { date, weightKg } of entries.slice(i, i + 400)) {
+      batch.set(doc(db, 'users', uid, 'weights', date), { date, weightKg, source });
+    }
+    await batch.commit();
+  }
 }
 
 // --- Photos ----------------------------------------------------------------

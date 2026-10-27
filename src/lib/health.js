@@ -21,6 +21,10 @@ export async function latestWeightKg() {
   return null;
 }
 
+export async function weightSamplesSince() {
+  return [];
+}
+
 export async function activeEnergyForDay() {
   return null;
 }

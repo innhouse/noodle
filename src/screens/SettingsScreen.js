@@ -20,6 +20,11 @@ import {
 import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Dropdown, Field } from '../ui';
 
+const SYNC_WEIGHT_OPTIONS = [
+  { value: true, label: 'Import from Apple Health automatically' },
+  { value: false, label: 'Log by hand only' },
+];
+
 export default function SettingsScreen() {
   const { user, profile, updateProfile, signOut } = useAuth();
   // The draft holds what the user typed, in pounds and feet/inches. It is converted
@@ -68,6 +73,7 @@ export default function SettingsScreen() {
       manualProtein: Number(draft.manualProtein) || null,
       activeEnergyShare: draft.activeEnergyShare ?? (draft.useActiveEnergy ? 0.5 : 0),
       useActiveEnergy: Boolean(draft.useActiveEnergy),
+      syncHealthWeight: draft.syncHealthWeight !== false,
     });
     setSaved(true);
   }
@@ -184,6 +190,13 @@ export default function SettingsScreen() {
             options={ACTIVE_ENERGY_SHARES}
             onChange={(activeEnergyShare) => set({ activeEnergyShare })}
             hint="Health reports active energy only — your resting burn is already in the target, so never add the larger total figure. Phone-only estimates run high; a watch is more trustworthy."
+          />
+          <Dropdown
+            label="Weigh-ins"
+            value={draft.syncHealthWeight !== false}
+            options={SYNC_WEIGHT_OPTIONS}
+            onChange={(syncHealthWeight) => set({ syncHealthWeight })}
+            hint="On, every reading your scale sends to Health is added to the Weight log when you open it. Off, you log weigh-ins by hand."
           />
         </Card>
       ) : null}

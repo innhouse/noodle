@@ -73,6 +73,36 @@ export async function latestWeightKg() {
 }
 
 /**
+ * Every weigh-in Health holds from `since` onwards, one per local day.
+ *
+ * Several readings on one day collapse to the last one taken, matching how the
+ * store keys weights by date. Health's own data is left untouched — this is a
+ * read, and the app's log is a copy the user can correct independently.
+ */
+export async function weightSamplesSince(since) {
+  try {
+    const samples = await queryQuantitySamples(BODY_MASS, {
+      limit: 0,
+      ascending: true,
+      unit: 'kg',
+      filter: { date: { startDate: since, endDate: new Date() } },
+    });
+
+    const byDay = new Map();
+    for (const sample of samples ?? []) {
+      if (typeof sample.quantity !== 'number' || !(sample.quantity > 0)) continue;
+      byDay.set(localDayKey(sample.endDate ?? sample.startDate), sample.quantity);
+    }
+    return [...byDay.entries()]
+      .map(([date, weightKg]) => ({ date, weightKg }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  } catch (error) {
+    console.warn('health weight history read failed', error);
+    return [];
+  }
+}
+
+/**
  * Active energy burned on a given local day, in kcal. Excludes resting metabolism.
  *
  * Takes a day rather than assuming today so that scrolling back through the log

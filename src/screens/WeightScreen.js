@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { dayKey, formatDayLabel } from '../lib/dates';
 import { weeklyChange, weightTrend } from '../lib/nutrition';
-import { healthSupported, latestWeightKg, requestHealthAccess } from '../lib/health';
-import { saveWeight, watchWeights } from '../lib/store';
+import { healthSupported, requestHealthAccess, weightSamplesSince } from '../lib/health';
+import { saveWeight, saveWeights, watchWeights } from '../lib/store';
 import { displayLb, kgToLb, lbToKg } from '../lib/units';
 import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Empty, Field } from '../ui';
@@ -15,19 +15,49 @@ export default function WeightScreen() {
   const [entries, setEntries] = useState([]);
   const [input, setInput] = useState('');
   const [saving, setSaving] = useState(false);
-  const [healthWeight, setHealthWeight] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  const [imported, setImported] = useState(null);
+  const synced = useRef(false);
 
   useEffect(() => {
     if (!user) return undefined;
-    return watchWeights(user.uid, setEntries);
+    return watchWeights(user.uid, (rows) => {
+      setEntries(rows);
+      setLoaded(true);
+    });
   }, [user]);
 
+  // Pull every weigh-in Health holds that the log doesn't, once per visit.
+  //
+  // Waits for the first snapshot so it knows where the log ends, then asks Health
+  // for everything after that day. Readings already logged by hand are left alone
+  // unless Health has a different number for the same day — the scale is the
+  // better witness than memory.
+  const syncHealth = profile?.syncHealthWeight !== false;
   useEffect(() => {
-    if (!healthSupported) return;
+    if (!healthSupported || !syncHealth || !user || !loaded || synced.current) return;
+    synced.current = true;
     (async () => {
-      if (await requestHealthAccess()) setHealthWeight(await latestWeightKg());
-    })();
-  }, []);
+      if (!(await requestHealthAccess())) return;
+
+      const last = entries[entries.length - 1]?.date;
+      const since = last ? new Date(`${last}T00:00:00`) : new Date(Date.now() - 365 * 86_400_000);
+      const samples = await weightSamplesSince(since);
+
+      const known = new Map(entries.map((e) => [e.date, e.weightKg]));
+      const fresh = samples.filter(
+        (s) => !known.has(s.date) || Math.abs(known.get(s.date) - s.weightKg) > 0.01
+      );
+      if (fresh.length === 0) return;
+
+      await saveWeights(user.uid, fresh);
+      setImported(fresh.length);
+
+      // Keep the profile in step, same as a manual log does.
+      const newest = fresh[fresh.length - 1];
+      if (!last || newest.date >= last) await updateProfile({ weightKg: newest.weightKg });
+    })().catch((error) => console.warn('health weight sync failed', error));
+  }, [user, loaded, syncHealth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trended = useMemo(() => weightTrend(entries), [entries]);
   const rate = weeklyChange(trended);
@@ -65,18 +95,12 @@ export default function WeightScreen() {
         />
         <Button title="Log weight" onPress={log} loading={saving} disabled={!input.trim()} />
 
-        {healthWeight ? (
-          <>
-            <Text style={styles.healthNote}>
-              Apple Health has {displayLb(healthWeight.weightKg)} lb from{' '}
-              {formatDayLabel(dayKey(new Date(healthWeight.date)))}.
-            </Text>
-            <Button
-              title={`Use ${displayLb(healthWeight.weightKg)} lb from Health`}
-              variant="secondary"
-              onPress={() => setInput(displayLb(healthWeight.weightKg))}
-            />
-          </>
+        {healthSupported && syncHealth ? (
+          <Text style={styles.healthNote}>
+            {imported
+              ? `Added ${imported} ${imported === 1 ? 'reading' : 'readings'} from Apple Health.`
+              : 'Readings from Apple Health are added automatically. Log here only if you weighed in somewhere else.'}
+          </Text>
         ) : null}
       </Card>
 
