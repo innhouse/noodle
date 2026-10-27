@@ -318,7 +318,8 @@ function LabChart({ marker, points }) {
   const height = 150;
   const padTop = 22;
   const padBottom = 26;
-  const padX = 18;
+  const padLeft = 44;
+  const padRight = 18;
   const plotH = height - padTop - padBottom;
 
   if (!points.length) return null;
@@ -345,8 +346,20 @@ function LabChart({ marker, points }) {
   };
   const t0 = dayOf(points[0].date);
   const t1 = dayOf(points[points.length - 1].date);
-  const plotW = Math.max(0, width - padX * 2);
-  const xFor = (key) => padX + (t1 === t0 ? plotW / 2 : ((dayOf(key) - t0) / (t1 - t0)) * plotW);
+  const plotW = Math.max(0, width - padLeft - padRight);
+  const xFor = (key) => padLeft + (t1 === t0 ? plotW / 2 : ((dayOf(key) - t0) / (t1 - t0)) * plotW);
+
+  // Horizontal guides: the range bounds and the top and bottom of the scale.
+  const guides = [];
+  const addGuide = (v, strong) => {
+    if (v == null) return;
+    if (guides.some((g) => Math.abs(g.v - v) < (max - min) * 0.06)) return;
+    guides.push({ v, strong });
+  };
+  addGuide(marker.range?.low, true);
+  addGuide(marker.range?.high, true);
+  addGuide(Math.max(...values), false);
+  addGuide(Math.min(...values), false);
 
   // Least-squares line through the results, clipped to the plot's vertical extent.
   let trend = null;
@@ -395,15 +408,27 @@ function LabChart({ marker, points }) {
             <View
               style={[
                 styles.band,
-                { top: bandTop, height: Math.max(2, bandBottom - bandTop), left: padX, width: plotW },
+                { top: bandTop, height: Math.max(2, bandBottom - bandTop), left: padLeft, width: plotW },
               ]}
             />
           ) : null}
           {marker.range ? (
-            <Text style={[styles.bandLabel, { top: bandTop - 14, right: padX }]}>
-              normal {formatRange(marker.range)}
-            </Text>
+            <Text style={[styles.bandLabel, { top: bandTop + 3, right: padRight + 4 }]}>normal</Text>
           ) : null}
+          {guides.map((g) => (
+            <View key={g.v}>
+              <View
+                style={[
+                  styles.guide,
+                  g.strong && styles.guideStrong,
+                  { top: yFor(g.v), left: padLeft, width: plotW },
+                ]}
+              />
+              <Text style={[styles.yLabel, g.strong && styles.yLabelStrong, { top: yFor(g.v) - 7, width: padLeft - 6 }]}>
+                {formatLab(g.v, marker)}
+              </Text>
+            </View>
+          ))}
           {trend ? (
             <View
               style={[
@@ -417,7 +442,7 @@ function LabChart({ marker, points }) {
               ]}
             />
           ) : null}
-          <View style={[styles.axis, { top: baseline, left: padX, width: plotW }]} />
+          <View style={[styles.axis, { top: baseline, left: padLeft, width: plotW }]} />
           {points.map((point) => {
             const x = xFor(point.date);
             const y = yFor(point.value);
@@ -480,7 +505,11 @@ const styles = StyleSheet.create({
   rowCard: {},
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   history: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: spacing.md, paddingTop: spacing.sm },
-  chart: { width: '100%', marginTop: spacing.md, overflow: 'hidden' },
+  chart: { width: '100%', maxWidth: 640, marginTop: spacing.md, overflow: 'hidden' },
+  guide: { position: 'absolute', height: 1, backgroundColor: colors.line, opacity: 0.7 },
+  guideStrong: { backgroundColor: colors.primary, opacity: 0.35 },
+  yLabel: { position: 'absolute', left: 0, textAlign: 'right', fontSize: 10, color: colors.inkSoft },
+  yLabelStrong: { color: colors.primary, fontWeight: '700' },
   band: { position: 'absolute', backgroundColor: colors.primarySoft, borderRadius: 4 },
   bandLabel: { position: 'absolute', fontSize: 10, color: colors.primary, fontWeight: '600' },
   axis: { position: 'absolute', height: 1, backgroundColor: colors.line },
