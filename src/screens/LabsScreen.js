@@ -13,6 +13,7 @@ import {
   markersWithData,
   meetsTarget,
   outsideRange,
+  rangeStatus,
 } from '../lib/labs';
 import { deleteLabs, saveLabs, watchLabs } from '../lib/store';
 import { colors, fonts, radius, spacing } from '../theme';
@@ -251,13 +252,15 @@ export default function LabsScreen() {
         const value = latest.values[marker.key];
         const target = profile?.labTargets?.[marker.key];
         const ok = meetsTarget(value, target, marker);
-        const flagged = outsideRange(value, marker.range);
+        const status = rangeStatus(value, marker.range);
+        const flagged = status === 'high' || status === 'low';
+        const edge = ok === false || flagged ? colors.accent : status === 'in' || ok ? colors.primary : colors.line;
         const change = previous ? value - previous.values[marker.key] : null;
         const expanded = open === marker.key;
         const history = historyFor(tests, marker.key);
         return (
           <Pressable key={marker.key} onPress={() => setOpen(expanded ? null : marker.key)}>
-            <Card style={styles.rowCard}>
+            <Card style={[styles.rowCard, { borderLeftWidth: 5, borderLeftColor: edge }]}>
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowLabel}>{marker.label}</Text>
@@ -268,6 +271,18 @@ export default function LabsScreen() {
                       ? ` · your target ${marker.betterWhen === 'lower' ? '≤' : '≥'} ${target}`
                       : ''}
                   </Text>
+                  <View style={styles.pillRow}>
+                    {status ? (
+                      <Pill tone={status === 'in' ? 'good' : 'warn'}>
+                        {status === 'in' ? 'In lab range' : status === 'high' ? 'Above lab range' : 'Below lab range'}
+                      </Pill>
+                    ) : null}
+                    {ok != null ? (
+                      <Pill tone={ok ? 'good' : 'warn'}>
+                        {ok ? 'Target met' : marker.betterWhen === 'lower' ? 'Above target' : 'Below target'}
+                      </Pill>
+                    ) : null}
+                  </View>
                   {change != null && Math.abs(change) >= 10 ** -marker.decimals ? (
                     <View style={styles.pillWrap}>
                       <Pill
@@ -294,10 +309,7 @@ export default function LabsScreen() {
                   >
                     {formatLab(value, marker)}
                   </Text>
-                  <Text style={styles.rowUnit}>
-                    {marker.unit}
-                    {flagged ? ' · outside lab range' : ''}
-                  </Text>
+                  <Text style={styles.rowUnit}>{marker.unit}</Text>
                 </View>
               </View>
 
@@ -515,6 +527,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: fonts.body, fontWeight: '600', color: colors.ink },
   rowMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
   pillWrap: { marginTop: spacing.xs, alignSelf: 'flex-start' },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
   rowValueBlock: { alignItems: 'flex-end' },
   rowValue: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   rowUnit: { fontSize: fonts.tiny, color: colors.inkSoft },

@@ -83,3 +83,11 @@ export function historyFor(tests, key) {
     .map((t) => ({ date: t.date, value: t.values[key] }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
+
+/** 'in', 'high' or 'low' against the lab's interval, or null without one. */
+export function rangeStatus(value, range) {
+  if (value == null || !range) return null;
+  if (range.high != null && value > range.high) return 'high';
+  if (range.low != null && value < range.low) return 'low';
+  return 'in';
+}
