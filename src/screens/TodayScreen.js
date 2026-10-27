@@ -1,18 +1,26 @@
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useAuth } from '../context/AuthContext';
 import { addDays, dayKey, formatDayLabel, formatTime } from '../lib/dates';
 import { healthSupported } from '../lib/health';
+import { watchWeights, watchWorkoutNotes } from '../lib/store';
+import { kgToLb } from '../lib/units';
 import { describeAge, formatHours, useHealthData } from '../lib/useHealthData';
+import { suddenGain } from '../lib/weight';
 import {
   againstBaseline,
+  beatsPerKm,
   describeType,
   formatDuration,
   formatKm,
   formatPace,
+  minutesThisWeek,
   onDay,
 } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
-import { Card, Empty } from '../ui';
+import { Card, Empty, Pill } from '../ui';
+import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
  * The morning view: what happened last night, how the body reads this morning,
@@ -24,8 +32,22 @@ import { Card, Empty } from '../ui';
  * only baseline this screen uses.
  */
 export default function TodayScreen() {
+  const { user, profile } = useAuth();
   const { series, workouts, loading, denied, capturedAt } = useHealthData();
+  const [notes, setNotes] = useState({});
+  const [weights, setWeights] = useState([]);
+  const [noting, setNoting] = useState(null);
   const today = dayKey();
+
+  useEffect(() => {
+    if (!user) return undefined;
+    const stopNotes = watchWorkoutNotes(user.uid, setNotes);
+    const stopWeights = watchWeights(user.uid, setWeights);
+    return () => {
+      stopNotes();
+      stopWeights();
+    };
+  }, [user]);
 
   if (loading) {
     return (
@@ -43,6 +65,9 @@ export default function TodayScreen() {
   const nightIsRecent = lastNight && lastNight.date >= addDays(today, -1);
   const resting = againstBaseline(series?.restingHeartRate);
   const hrv = againstBaseline(series?.hrv);
+  const gain = suddenGain(weights);
+  const target = profile?.weeklyMinutesTarget ?? 150;
+  const thisWeek = minutesThisWeek(workouts);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -69,9 +94,28 @@ export default function TodayScreen() {
         />
       ) : null}
 
+      {gain ? (
+        <Card style={styles.flagCard}>
+          <Text style={styles.flagTitle}>Weight up {kgToLb(gain.gainKg).toFixed(1)} lb</Text>
+          <Text style={styles.flagBody}>
+            {gain.window === 'day' ? 'Since yesterday' : `Since ${formatDayLabel(gain.since)}`}.
+            A jump this size after a heart attack is one care teams ask to hear about, because
+            it can be fluid rather than food. Worth a call if it holds tomorrow, sooner with any
+            swelling or breathlessness.
+          </Text>
+        </Card>
+      ) : null}
+
       <Text style={styles.sectionHeading}>Workouts</Text>
       {sessionsToday.length ? (
-        sessionsToday.map((workout) => <WorkoutCard key={workout.id} workout={workout} />)
+        sessionsToday.map((workout) => (
+          <WorkoutCard
+            key={workout.id}
+            workout={workout}
+            note={notes[workout.id]}
+            onPress={() => setNoting(workout)}
+          />
+        ))
       ) : (
         <Card>
           <Text style={styles.restTitle}>Nothing yet today</Text>
@@ -84,6 +128,11 @@ export default function TodayScreen() {
           </Text>
         </Card>
       )}
+      {workouts.length ? (
+        <Text style={styles.weekLine}>
+          {Math.round(thisWeek)} of {target} min this week
+        </Text>
+      ) : null}
 
       <Text style={styles.sectionHeading}>Last night</Text>
       {nightIsRecent ? (
@@ -136,11 +185,15 @@ export default function TodayScreen() {
         these numbers, and Noodle does not know which is which. Anything that worries you is a
         conversation with your doctor.
       </Text>
+
+      {noting ? (
+        <WorkoutNoteSheet workout={noting} note={notes[noting.id]} onClose={() => setNoting(null)} />
+      ) : null}
     </ScrollView>
   );
 }
 
-function WorkoutCard({ workout }) {
+function WorkoutCard({ workout, note, onPress }) {
   const type = describeType(workout.type);
   const pace = formatPace(workout.metres, workout.durationMin);
   const details = [
@@ -150,25 +203,42 @@ function WorkoutCard({ workout }) {
     workout.kcal ? `${workout.kcal} kcal` : null,
   ].filter(Boolean);
 
+  const bpk = beatsPerKm(workout);
+  const hasNote = note && (note.symptoms?.length || note.text);
+
   return (
-    <Card style={styles.workoutCard}>
-      <Text style={styles.workoutIcon}>{type.icon}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.workoutTitle}>{type.label}</Text>
-        <Text style={styles.workoutMeta}>
-          {formatTime(workout.start)}
-          {workout.source ? ` · ${workout.source}` : ''}
-        </Text>
-        <Text style={styles.workoutDetails}>{details.join(' · ')}</Text>
-      </View>
-      {workout.avgHr ? (
-        <View style={styles.hrBlock}>
-          <Text style={styles.hrValue}>{workout.avgHr}</Text>
-          <Text style={styles.hrLabel}>avg bpm</Text>
-          {workout.maxHr ? <Text style={styles.hrLabel}>max {workout.maxHr}</Text> : null}
+    <Pressable onPress={onPress}>
+      <Card style={styles.workoutCard}>
+        <Text style={styles.workoutIcon}>{type.icon}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.workoutTitle}>{type.label}</Text>
+          <Text style={styles.workoutMeta}>
+            {formatTime(workout.start)}
+            {workout.source ? ` · ${workout.source}` : ''}
+          </Text>
+          <Text style={styles.workoutDetails}>{details.join(' · ')}</Text>
+          {bpk || workout.hrr ? (
+            <Text style={styles.workoutExtra}>
+              {[bpk ? `${bpk} beats/km` : null, workout.hrr ? `recovery −${workout.hrr} bpm` : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+          ) : null}
+          <View style={styles.pillWrap}>
+            <Pill tone={hasNote ? (note.symptoms?.some((k) => k !== 'fine') ? 'warn' : 'good') : 'neutral'}>
+              {hasNote ? 'Noted · tap to change' : 'How did it feel? Tap to note'}
+            </Pill>
+          </View>
         </View>
-      ) : null}
-    </Card>
+        {workout.avgHr ? (
+          <View style={styles.hrBlock}>
+            <Text style={styles.hrValue}>{workout.avgHr}</Text>
+            <Text style={styles.hrLabel}>avg bpm</Text>
+            {workout.maxHr ? <Text style={styles.hrLabel}>max {workout.maxHr}</Text> : null}
+          </View>
+        ) : null}
+      </Card>
+    </Pressable>
   );
 }
 
@@ -247,6 +317,13 @@ const styles = StyleSheet.create({
   workoutTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
   workoutMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
   workoutDetails: { fontSize: fonts.small, color: colors.ink, marginTop: spacing.xs },
+  workoutExtra: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
+  pillWrap: { marginTop: spacing.sm, alignSelf: 'flex-start' },
+  weekLine: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: -spacing.xs, marginBottom: spacing.xs },
+
+  flagCard: { backgroundColor: colors.accentSoft, borderColor: colors.accent, marginTop: spacing.md },
+  flagTitle: { fontSize: fonts.big, fontWeight: '800', color: colors.ink },
+  flagBody: { fontSize: fonts.small, color: colors.ink, lineHeight: 20, marginTop: spacing.xs },
   hrBlock: { alignItems: 'flex-end' },
   hrValue: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   hrLabel: { fontSize: fonts.tiny, color: colors.inkSoft },

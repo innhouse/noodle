@@ -26,6 +26,7 @@ const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass';
 const ACTIVE_ENERGY = 'HKQuantityTypeIdentifierActiveEnergyBurned';
 const SLEEP_ANALYSIS = 'HKCategoryTypeIdentifierSleepAnalysis';
 const HEART_RATE = 'HKQuantityTypeIdentifierHeartRate';
+const HR_RECOVERY = 'HKQuantityTypeIdentifierHeartRateRecoveryOneMinute';
 const WORKOUT = 'HKWorkoutTypeIdentifier';
 
 // HKCategoryValueSleepAnalysis. inBed (0) and awake (2) are not sleep — counting
@@ -158,6 +159,10 @@ export async function workoutsSince(since) {
     return [];
   }
 
+  // The watch writes a one-minute recovery sample a minute or so after a session
+  // ends. Fetch them all once and match each to the workout it followed.
+  const recoveries = await recoverySamplesSince(since);
+
   const results = [];
   for (const workout of workouts ?? []) {
     try {
@@ -190,6 +195,7 @@ export async function workoutsSince(since) {
           : null,
         avgHr: avgHr == null ? null : Math.round(avgHr),
         maxHr: maxHr == null ? null : Math.round(maxHr),
+        hrr: recoveryFor(recoveries, end),
         indoor: metadata.HKIndoorWorkout === true || metadata.HKIndoorWorkout === 1,
         source: sourceName(workout, metadata),
       });
@@ -198,6 +204,29 @@ export async function workoutsSince(since) {
     }
   }
   return results;
+}
+
+async function recoverySamplesSince(since) {
+  try {
+    const samples = await queryQuantitySamples(HR_RECOVERY, {
+      limit: 0,
+      ascending: true,
+      unit: 'count/min',
+      filter: { date: { startDate: since, endDate: new Date() } },
+    });
+    return (samples ?? [])
+      .filter((sample) => typeof sample.quantity === 'number')
+      .map((sample) => ({ at: new Date(sample.startDate).getTime(), drop: sample.quantity }));
+  } catch {
+    return [];
+  }
+}
+
+/** The recovery reading taken within five minutes after a workout ended, if any. */
+function recoveryFor(recoveries, end) {
+  const endMs = end.getTime();
+  const match = recoveries.find((r) => r.at >= endMs - 60_000 && r.at <= endMs + 5 * 60_000);
+  return match ? Math.round(match.drop) : null;
 }
 
 function quantityIn(quantity, unit) {

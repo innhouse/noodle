@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { dayKey, formatDayLabel } from '../lib/dates';
-import { weeklyChange, weightTrend } from '../lib/weight';
+import { suddenGain, weeklyChange, weightTrend } from '../lib/weight';
 import { healthSupported, requestHealthAccess, weightSamplesSince } from '../lib/health';
 import { saveWeight, saveWeights, watchWeights } from '../lib/store';
 import { displayLb, kgToLb, lbToKg } from '../lib/units';
@@ -59,6 +59,7 @@ export default function WeightScreen() {
   const trended = useMemo(() => weightTrend(entries), [entries]);
   const rate = weeklyChange(trended);
   const latest = trended[trended.length - 1];
+  const gain = useMemo(() => suddenGain(entries), [entries]);
 
   async function log() {
     const pounds = Number(input);
@@ -100,6 +101,18 @@ export default function WeightScreen() {
           </Text>
         ) : null}
       </Card>
+
+      {gain ? (
+        <Card style={styles.flagCard}>
+          <Text style={styles.flagTitle}>Up {kgToLb(gain.gainKg).toFixed(1)} lb</Text>
+          <Text style={styles.flagBody}>
+            {gain.window === 'day' ? 'Since yesterday' : `Since ${formatDayLabel(gain.since)}`}.
+            After a heart attack, a jump this size is one care teams ask to hear about, because it
+            can be fluid rather than food. Worth a call if it holds tomorrow, sooner with any
+            swelling or breathlessness.
+          </Text>
+        </Card>
+      ) : null}
 
       {latest ? (
         <Card style={styles.trendCard}>
@@ -156,6 +169,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     lineHeight: 20,
   },
+  flagCard: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  flagTitle: { fontSize: fonts.big, fontWeight: '800', color: colors.ink },
+  flagBody: { fontSize: fonts.small, color: colors.ink, lineHeight: 20, marginTop: spacing.xs },
   trendCard: { alignItems: 'center', paddingVertical: spacing.xl },
   trendValue: { fontSize: 52, fontWeight: '800', color: colors.ink, lineHeight: 58 },
   trendLabel: {

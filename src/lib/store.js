@@ -5,6 +5,8 @@
  *   users/{uid}                       profile and preferences
  *   users/{uid}/weights/{YYYY-MM-DD}  one scale reading
  *   users/{uid}/workouts/{uuid}       one session, mirrored from Apple Health
+ *   users/{uid}/workoutNotes/{uuid}   how a session felt, written by the user
+ *   users/{uid}/labs/{YYYY-MM-DD}     one blood test, typed in from the report
  *   users/{uid}/health/snapshot       daily series mirrored from Apple Health
  *
  * Apple Health stays the source of truth for everything mirrored here. The copies
@@ -13,6 +15,7 @@
  */
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
@@ -96,6 +99,46 @@ export async function saveWorkouts(uid, workouts) {
     }
     await batch.commit();
   }
+}
+
+// --- Workout notes ---------------------------------------------------------
+
+// Kept apart from the mirrored session so a Health re-read can never overwrite
+// what the person wrote about how it felt.
+export function watchWorkoutNotes(uid, callback) {
+  return onSnapshot(
+    collection(db, 'users', uid, 'workoutNotes'),
+    (snapshot) => callback(Object.fromEntries(snapshot.docs.map((d) => [d.id, d.data()]))),
+    (error) => console.warn('workout notes watch failed', error)
+  );
+}
+
+export function saveWorkoutNote(uid, workoutId, note) {
+  return setDoc(doc(db, 'users', uid, 'workoutNotes', workoutId), {
+    ...note,
+    workoutId,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+// --- Labs ------------------------------------------------------------------
+
+export function watchLabs(uid, callback) {
+  const q = query(collection(db, 'users', uid, 'labs'), orderBy('date', 'desc'));
+  return onSnapshot(
+    q,
+    (snapshot) => callback(snapshot.docs.map((d) => d.data())),
+    (error) => console.warn('labs watch failed', error)
+  );
+}
+
+/** One test per date; entering the same date again corrects it. */
+export function saveLabs(uid, date, values) {
+  return setDoc(doc(db, 'users', uid, 'labs', date), { date, values }, { merge: true });
+}
+
+export function deleteLabs(uid, date) {
+  return deleteDoc(doc(db, 'users', uid, 'labs', date));
 }
 
 // --- Health snapshot -------------------------------------------------------

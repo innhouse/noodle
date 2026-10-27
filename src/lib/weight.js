@@ -45,3 +45,42 @@ export function weeklyChange(trended, minDays = 14) {
   if (den === 0) return null;
   return (num / den) * 7;
 }
+
+/**
+ * A sudden gain worth mentioning to a care team.
+ *
+ * After a cardiac event, patients are told to report a jump of roughly a kilo
+ * overnight or two-and-a-bit over a week, because it can be fluid rather than
+ * food. This compares raw readings, not the smoothed trend — the trend is built
+ * to hide exactly this kind of jump. It reports the numbers and says nothing
+ * about what they mean; that is the care team's call.
+ */
+export function suddenGain(entries, { dayKg = 0.9, weekKg = 2.3 } = {}) {
+  const sorted = [...(entries ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  if (sorted.length < 2) return null;
+  const latest = sorted[sorted.length - 1];
+  const dayOf = (key) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return Math.round(new Date(y, m - 1, d).getTime() / 86_400_000);
+  };
+  const latestDay = dayOf(latest.date);
+  const within = (days) =>
+    sorted.filter((e) => {
+      const age = latestDay - dayOf(e.date);
+      return age >= 1 && age <= days;
+    });
+
+  const yesterday = within(2);
+  if (yesterday.length) {
+    const previous = yesterday[yesterday.length - 1];
+    const gain = latest.weightKg - previous.weightKg;
+    if (gain >= dayKg) return { gainKg: gain, since: previous.date, window: 'day' };
+  }
+  const week = within(7);
+  if (week.length) {
+    const lowest = week.reduce((min, e) => (e.weightKg < min.weightKg ? e : min), week[0]);
+    const gain = latest.weightKg - lowest.weightKg;
+    if (gain >= weekKg) return { gainKg: gain, since: lowest.date, window: 'week' };
+  }
+  return null;
+}

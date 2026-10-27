@@ -50,6 +50,7 @@ export default function SettingsScreen() {
       heightCm: feetInchesToCm(draft.feet, draft.inches) ?? null,
       age: Number(draft.age) || null,
       syncHealthWeight: draft.syncHealthWeight !== false,
+      weeklyMinutesTarget: Number(draft.weeklyMinutesTarget) || 150,
     });
     setSaved(true);
   }
@@ -111,6 +112,18 @@ export default function SettingsScreen() {
         />
       </Card>
 
+      <Card>
+        <Text style={styles.cardTitle}>Training</Text>
+        <Field
+          label="Weekly exercise target (minutes)"
+          value={String(draft.weeklyMinutesTarget ?? 150)}
+          onChangeText={(text) => set({ weeklyMinutesTarget: text })}
+          keyboardType="number-pad"
+          placeholder="150"
+          hint="Whatever your rehab program set. The Today and Workouts tabs show this week against it."
+        />
+      </Card>
+
       {healthSupported ? (
         <Card>
           <Text style={styles.cardTitle}>Apple Health</Text>
@@ -150,7 +163,7 @@ export default function SettingsScreen() {
           />
         )}
         {cleanup?.failed ? (
-          <Text style={styles.cleanupResult}>That didn't work. Try again in a moment.</Text>
+          <Text style={styles.cleanupResult}>That didn’t work. Try again in a moment.</Text>
         ) : null}
       </Card>
 

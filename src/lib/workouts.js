@@ -76,7 +76,7 @@ export function weekKey(dayKeyString) {
  * Sessions grouped by week, newest first, each with its totals.
  *
  * Distance only sums the sessions that have one, so a week of runs and lifts
- * reports the running miles rather than pretending the lifts covered ground.
+ * reports the running kilometres rather than pretending the lifts covered ground.
  */
 export function groupByWeek(workouts) {
   const weeks = new Map();
@@ -123,4 +123,65 @@ export function againstBaseline(series, days = 30, minReadings = 5) {
   if (earlier.length < minReadings) return { value: last.value, date: last.date, baseline: null };
   const baseline = earlier.reduce((sum, value) => sum + value, 0) / earlier.length;
   return { value: last.value, date: last.date, baseline, change: last.value - baseline };
+}
+
+/**
+ * Heartbeats per kilometre: how much heart it took to cover the ground.
+ *
+ * The fitness measure that still works on a beta-blocker. VO₂ max and zones
+ * assume a heart rate that responds freely to effort; this only asks whether
+ * the same distance is costing fewer beats than it did a month ago. Lower is
+ * fitter. Only meaningful for sessions with both a distance and a heart rate,
+ * and only comparable between sessions of the same kind.
+ */
+export function beatsPerKm(workout) {
+  if (!workout?.metres || !workout.durationMin || !workout.avgHr || workout.metres < 500) return null;
+  return Math.round((workout.avgHr * workout.durationMin) / (workout.metres / 1000));
+}
+
+/**
+ * The last `count` outdoor runs and walks with an efficiency reading, oldest
+ * first, plus how the recent ones compare with the earlier ones.
+ */
+export function efficiencyTrend(workouts, count = 10) {
+  const sessions = (workouts ?? [])
+    .filter((w) => (w.type === 37 || w.type === 52 || w.type === 24) && beatsPerKm(w))
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .slice(-count)
+    .map((w) => ({ ...w, beatsPerKm: beatsPerKm(w) }));
+  if (sessions.length < 4) return { sessions, change: null };
+  const half = Math.floor(sessions.length / 2);
+  const mean = (list) => list.reduce((sum, w) => sum + w.beatsPerKm, 0) / list.length;
+  const earlier = mean(sessions.slice(0, half));
+  const recent = mean(sessions.slice(-half));
+  return { sessions, change: recent - earlier, earlier, recent };
+}
+
+/** Minutes of exercise in the current Monday-based week. */
+export function minutesThisWeek(workouts) {
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const key = weekKey(
+    `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(
+      monday.getDate()
+    ).padStart(2, '0')}`
+  );
+  return (workouts ?? [])
+    .filter((w) => weekKey(w.date) === key)
+    .reduce((sum, w) => sum + (w.durationMin ?? 0), 0);
+}
+
+export const SYMPTOMS = [
+  { key: 'fine', label: 'Felt fine' },
+  { key: 'chest', label: 'Chest discomfort' },
+  { key: 'breath', label: 'Unusually breathless' },
+  { key: 'dizzy', label: 'Light-headed' },
+  { key: 'palpitations', label: 'Palpitations' },
+  { key: 'tired', label: 'Unusually tired' },
+];
+
+export function symptomLabel(key) {
+  return SYMPTOMS.find((s) => s.key === key)?.label ?? key;
 }
