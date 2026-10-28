@@ -243,10 +243,23 @@ function quantityIn(quantity, unit) {
   return value;
 }
 
+/**
+ * The app that wrote the workout — "Apple Watch", "JEFIT".
+ *
+ * The source arrives as a native proxy object whose own `name` property is the
+ * proxy's class name, not the app's, so it has to be unwrapped with toJSON first.
+ */
 function sourceName(workout, metadata) {
   const revision = workout.sourceRevision ?? workout.source;
-  const name = revision?.source?.name ?? revision?.name;
-  if (name) return name;
+  const source = revision?.source ?? revision;
+  let plain = null;
+  try {
+    plain = typeof source?.toJSON === 'function' ? source.toJSON() : source;
+  } catch {
+    plain = null;
+  }
+  const name = plain?.name;
+  if (name && name !== 'SourceProxy') return String(name);
   if (metadata.HKWorkoutBrandName) return String(metadata.HKWorkoutBrandName);
   return null;
 }

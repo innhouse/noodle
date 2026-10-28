@@ -168,8 +168,13 @@ export function againstBaseline(series, days = 30, minReadings = 5) {
  * fitter. Only meaningful for sessions with both a distance and a heart rate,
  * and only comparable between sessions of the same kind.
  */
+export const ON_FOOT = { runs: [37], walks: [52, 24], all: [37, 52, 24] };
+
 export function beatsPerKm(workout) {
   if (!workout?.metres || !workout.durationMin || !workout.avgHr || workout.metres < 500) return null;
+  // Only on foot: a court sport or a bike ride records distance too, and beats
+  // per kilometre means nothing there.
+  if (!ON_FOOT.all.includes(workout.type)) return null;
   return Math.round((workout.avgHr * workout.durationMin) / (workout.metres / 1000));
 }
 
@@ -177,8 +182,6 @@ export function beatsPerKm(workout) {
  * The last `count` outdoor runs and walks with an efficiency reading, oldest
  * first, plus how the recent ones compare with the earlier ones.
  */
-export const ON_FOOT = { runs: [37], walks: [52, 24], all: [37, 52, 24] };
-
 export function efficiencyTrend(workouts, count = 10, which = 'all') {
   const types = ON_FOOT[which] ?? ON_FOOT.all;
   const sessions = (workouts ?? [])
