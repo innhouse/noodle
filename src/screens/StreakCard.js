@@ -58,6 +58,20 @@ export default function StreakCard({ workouts, minKm = 10, onPick }) {
           <RecordRow label="Fastest" run={records.fastest} onPick={onPick} />
           <RecordRow label="Slowest" run={records.slowest} onPick={onPick} />
           <RecordRow label="Longest" run={records.longest} onPick={onPick} showKm />
+          {records.longestByYear.length ? (
+            <>
+              <Text style={[styles.sub, { marginTop: spacing.md }]}>Longest run each year</Text>
+              {records.longestByYear.map((w) => (
+                <Pressable key={w.id} onPress={onPick ? () => onPick(w) : undefined} style={styles.row}>
+                  <Text style={styles.days}>{w.date.slice(0, 4)}</Text>
+                  <Text style={styles.dates}>
+                    {w.km.toFixed(1)} km · {formatPaceMin(w.pace)} /km · {longDate(w.date)}
+                    {w.avgHr ? ` · ${w.avgHr} bpm` : ''}
+                  </Text>
+                </Pressable>
+              ))}
+            </>
+          ) : null}
           {records.halves.length ? (
             <>
               <Text style={[styles.sub, { marginTop: spacing.md }]}>

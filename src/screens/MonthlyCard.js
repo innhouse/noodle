@@ -53,6 +53,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
             <Text style={[styles.cell, styles.month, styles.headText]}>Year</Text>
             <Text style={[styles.cell, styles.headText]}>Run km</Text>
             <Text style={[styles.cell, styles.headText]}>Avg km</Text>
+            <Text style={[styles.cell, styles.headText]}>Long</Text>
             <Text style={[styles.cell, styles.headText]}>Pace</Text>
             <Text style={[styles.cell, styles.headText]}>HR</Text>
             <Text style={[styles.cell, styles.headText]}>B/km</Text>
@@ -73,6 +74,8 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
               </Text>
               <Text style={styles.cell}>{entry.row.runKm}</Text>
               <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
+            <Text style={styles.cell}>{entry.row.longestKm ?? '—'}</Text>
+              <Text style={styles.cell}>{entry.row.longestKm ?? '—'}</Text>
               <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
               <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
               <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
@@ -88,6 +91,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
         <Text style={[styles.cell, styles.headText]}>Run km</Text>
         <Text style={[styles.cell, styles.headText]}>Avg km</Text>
+        <Text style={[styles.cell, styles.headText]}>Long</Text>
         <Text style={[styles.cell, styles.headText]}>Pace</Text>
         <Text style={[styles.cell, styles.headText]}>HR</Text>
         <Text style={[styles.cell, styles.headText]}>B/km</Text>
@@ -114,14 +118,15 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
               {entry.row.runKm}
             </Text>
             <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
+            <Text style={styles.cell}>{entry.row.longestKm ?? '—'}</Text>
             <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
             <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
             <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
           </Pressable>
         )
       )}
-      <SummaryRow label={`${year} to date`} cells={[ytd.runKm, ytd.avgRunKm ?? '—', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
-      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, average.avgRunKm ?? '—', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
+      <SummaryRow label={`${year} to date`} cells={[ytd.runKm, ytd.avgRunKm ?? '—', '', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, average.avgRunKm ?? '—', '', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
 
       {years.length > 1 ? (
         <>
@@ -131,6 +136,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
             <Text style={[styles.cell, styles.headText]}>Sess.</Text>
             <Text style={[styles.cell, styles.headText]}>Run</Text>
             <Text style={[styles.cell, styles.headText]}>Str.</Text>
+            <Text style={[styles.cell, styles.headText]}>Walk</Text>
             <Text style={[styles.cell, styles.headText]}>Other</Text>
             <Text style={[styles.cell, styles.headText]}>Avg min</Text>
             <Text style={[styles.cell, styles.headText]}>Hours</Text>
@@ -151,6 +157,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
                 <Text style={styles.cell}>{entry.row.sessions}</Text>
                 <Text style={styles.cell}>{entry.row.mix.runs}</Text>
                 <Text style={styles.cell}>{entry.row.mix.strength}</Text>
+                <Text style={styles.cell}>{entry.row.mix.walks}</Text>
                 <Text style={styles.cell}>{entry.row.mix.other}</Text>
                 <Text style={styles.cell}>{entry.row.avgMin ?? '—'}</Text>
                 <Text style={styles.cell}>{Math.round(entry.row.minutes / 60)}</Text>
@@ -166,6 +173,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
         <Text style={[styles.cell, styles.headText]}>Sess.</Text>
         <Text style={[styles.cell, styles.headText]}>Run</Text>
         <Text style={[styles.cell, styles.headText]}>Str.</Text>
+        <Text style={[styles.cell, styles.headText]}>Walk</Text>
         <Text style={[styles.cell, styles.headText]}>Other</Text>
         <Text style={[styles.cell, styles.headText]}>Avg min</Text>
         <Text style={[styles.cell, styles.headText]}>Total</Text>
@@ -190,6 +198,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
             <Text style={styles.cell}>{entry.row.sessions}</Text>
             <Text style={styles.cell}>{entry.row.mix.runs}</Text>
             <Text style={styles.cell}>{entry.row.mix.strength}</Text>
+            <Text style={styles.cell}>{entry.row.mix.walks}</Text>
             <Text style={styles.cell}>{entry.row.mix.other}</Text>
             <Text style={styles.cell}>{entry.row.avgMin ?? '—'}</Text>
             <Text style={[styles.cell, tone(entry.row.met.minutes)]}>
@@ -199,8 +208,8 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
           </Pressable>
         )
       )}
-      <SummaryRow label={`${year} to date`} cells={[ytd.sessions, '', '', '', ytd.sessions ? Math.round(ytd.minutes / ytd.sessions) : '—', ytd.minutes]} />
-      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.sessions, '', '', '', average.sessions ? Math.round(average.minutes / average.sessions) : '—', average.minutes]} />
+      <SummaryRow label={`${year} to date`} cells={[ytd.sessions, '', '', '', '', ytd.sessions ? Math.round(ytd.minutes / ytd.sessions) : '—', ytd.minutes]} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.sessions, '', '', '', '', average.sessions ? Math.round(average.minutes / average.sessions) : '—', average.minutes]} />
 
       {activities.length ? (
         <>
