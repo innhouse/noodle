@@ -24,7 +24,8 @@ import {
 } from './store';
 
 const SERIES_DAYS = 90;
-const WORKOUT_DAYS = 365 * 5;
+// Everything Health holds; incremental sync keeps later reads cheap.
+const WORKOUT_DAYS = 365 * 10;
 
 export function useHealthData() {
   const { user, profile } = useAuth();

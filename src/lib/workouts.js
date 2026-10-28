@@ -525,3 +525,42 @@ export function yearlyTotals(workouts) {
     }))
     .sort((a, b) => b.year.localeCompare(a.year));
 }
+
+/**
+ * Dated markers the person keeps — a cardiac event, a medication change — as
+ * "YYYY-MM-DD label" lines in Settings. Used to divide tables and mark charts,
+ * because a comparison across one of these is not a comparison of fitness.
+ */
+export function parseEvents(text) {
+  return String(text ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/);
+      return match ? { date: match[1], label: match[2] || 'Event' } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Rows interleaved with event dividers, for a table sorted newest first. A
+ * divider goes above the first row dated on or after the event — read top to
+ * bottom, "since <event>" sits above the rows it applies to.
+ */
+export function withEventDividers(rows, events, dateOf) {
+  if (!events?.length || !rows?.length) return rows.map((row) => ({ row }));
+  const out = [];
+  const pending = [...events].sort((a, b) => b.date.localeCompare(a.date));
+  for (const row of rows) {
+    const d = dateOf(row);
+    while (pending.length && pending[0].date > d) {
+      // Event newer than this row: it belongs above the previous (newer) rows,
+      // which have already been emitted; emit it here as a boundary.
+      out.push({ divider: pending.shift() });
+    }
+    out.push({ row });
+  }
+  return out;
+}

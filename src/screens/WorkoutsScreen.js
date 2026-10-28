@@ -179,7 +179,7 @@ export default function WorkoutsScreen() {
         </Card>
       ) : null}
 
-      {workouts.length ? <MonthlyCard workouts={workouts} targets={profile?.monthly} /> : null}
+      {workouts.length ? <MonthlyCard workouts={workouts} targets={profile?.monthly} events={profile?.events} /> : null}
 
       {weeks.map((week) => (
         <View key={week.week}>
