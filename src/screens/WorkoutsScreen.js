@@ -16,9 +16,9 @@ import {
   formatKm,
   formatPace,
   groupByWeek,
-  minutesThisWeek,
+  exerciseMinutesThisWeek,
   symptomLabel,
-  weeklyMinutes,
+  weeklyExerciseMinutes,
 } from '../lib/workouts';
 import { BarChart, TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
@@ -33,7 +33,7 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  */
 export default function WorkoutsScreen() {
   const { user, profile } = useAuth();
-  const { workouts: recorded, loading, denied, capturedAt } = useHealthData();
+  const { series, workouts: recorded, loading, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
   const workouts = applyNotes(recorded, notes);
   const [noting, setNoting] = useState(null);
@@ -54,8 +54,9 @@ export default function WorkoutsScreen() {
   }
 
   const weeks = groupByWeek(workouts);
-  const target = profile?.weeklyMinutesTarget ?? 150;
-  const thisWeek = minutesThisWeek(workouts);
+  const target = profile?.weeklyMinutesTarget ?? 630;
+  const ring = series?.exerciseMinutes;
+  const thisWeek = exerciseMinutesThisWeek(ring, workouts);
   const hasRuns = workouts.some((w) => ON_FOOT.runs.includes(w.type) && beatsPerKm(w));
   const hasWalks = workouts.some((w) => ON_FOOT.walks.includes(w.type) && beatsPerKm(w));
   // Default to the split view when both exist; a walk costs fewer beats per km
@@ -113,10 +114,12 @@ export default function WorkoutsScreen() {
               ]}
             />
           </View>
-          <BarChart bars={weeklyMinutes(workouts, 12)} target={target} />
+          <BarChart bars={weeklyExerciseMinutes(ring, workouts, 12)} target={target} />
           <Text style={styles.targetHint}>
-            Minutes per week for the last twelve, against the target in Settings. Steady weeks
-            beat big ones.
+            {ring?.length
+              ? 'Exercise-ring minutes per week, the same count as the Fitness app, for the last twelve weeks against the target in Settings.'
+              : 'Minutes per week for the last twelve, against the target in Settings.'}{' '}
+            Steady weeks beat big ones.
           </Text>
         </Card>
       ) : null}

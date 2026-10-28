@@ -271,3 +271,40 @@ export function applyNotes(workouts, notes) {
     return override ? { ...w, type: override, originalType: w.type } : w;
   });
 }
+
+/**
+ * Minutes per week from Apple's own Exercise-ring series, so the chart matches
+ * the Fitness app rather than adding up workout durations (which count warm-ups
+ * and pauses the ring does not). Falls back to the workouts when the series is
+ * missing, which it is on the web before the phone has synced.
+ */
+export function weeklyExerciseMinutes(series, workouts, count = 12) {
+  if (!series?.length) return weeklyMinutes(workouts, count);
+  const byWeek = new Map();
+  for (const point of series) {
+    const key = weekKey(point.date);
+    byWeek.set(key, (byWeek.get(key) ?? 0) + (point.value ?? 0));
+  }
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const weeks = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() - 7 * i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    weeks.push({
+      label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      value: Math.round(byWeek.get(key) ?? 0),
+    });
+  }
+  return weeks;
+}
+
+/** This week's Exercise-ring minutes, or the workouts' total when the ring is missing. */
+export function exerciseMinutesThisWeek(series, workouts) {
+  if (!series?.length) return minutesThisWeek(workouts);
+  const weeks = weeklyExerciseMinutes(series, workouts, 1);
+  return weeks[0]?.value ?? 0;
+}
