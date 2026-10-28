@@ -38,6 +38,7 @@ export default function SettingsScreen() {
       kpiStrength: profile?.kpis?.strength ?? 2,
       kpiOther: profile?.kpis?.other ?? 1,
       kpiZoneMin: profile?.kpis?.zoneMin ?? 0,
+      kpiYogaMin: profile?.kpis?.yogaMin ?? 70,
       monthlyMinutes: profile?.monthly?.minutes ?? 0,
       monthlyRunKm: profile?.monthly?.runKm ?? 0,
       weightLb: displayLb(profile?.weightKg),
@@ -76,6 +77,7 @@ export default function SettingsScreen() {
         strength: Number(draft.kpiStrength) || 0,
         other: Number(draft.kpiOther) || 0,
         zoneMin: Number(draft.kpiZoneMin) || 0,
+        yogaMin: Number(draft.kpiYogaMin) || 0,
       },
       zone1Low: Number(draft.zone1Low) || null,
       zone1High: Number(draft.zone1High) || null,
@@ -180,6 +182,14 @@ export default function SettingsScreen() {
             />
           </View>
         </View>
+        <Field
+          label="Yoga and mobility (minutes per week)"
+          value={String(draft.kpiYogaMin ?? '')}
+          onChangeText={(text) => set({ kpiYogaMin: text })}
+          keyboardType="number-pad"
+          placeholder="70"
+          hint="Yoga, pilates, tai chi, stretching and cooldowns, added up over the week. 10 minutes a day is 70. Set 0 to turn it off."
+        />
         <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
           Zone 1 in beats per minute, as set on your watch or by your rehab program. Noodle
           can’t read the watch’s zones, and on a beta-blocker the usual formulas are wrong, so

@@ -309,7 +309,7 @@ export function exerciseMinutesThisWeek(series, workouts) {
   return weeks[0]?.value ?? 0;
 }
 
-export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, zoneMin: 0 };
+export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, zoneMin: 0, yogaMin: 70 };
 
 /** Which of the three weekly buckets a session falls in. */
 export function kpiBucket(workout) {
@@ -330,9 +330,10 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
   const byWeek = new Map();
   for (const w of workouts ?? []) {
     const key = weekKey(w.date);
-    const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0 };
+    const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0, yogaMin: 0 };
     week[kpiBucket(w)] += 1;
     week.zoneMin += w.zoneMin ?? 0;
+    if (describeType(w.type).kind === 'mobility') week.yogaMin += w.durationMin ?? 0;
     byWeek.set(key, week);
   }
   const now = new Date();
@@ -344,12 +345,14 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
     const d = new Date(monday);
     d.setDate(monday.getDate() - 7 * i);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const counts = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0 };
+    const counts = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0, yogaMin: 0 };
+    counts.yogaMin = Math.round(counts.yogaMin);
     const met = {
       runs: counts.runs >= goals.runs,
       strength: counts.strength >= goals.strength,
       other: counts.other >= goals.other,
       zoneMin: counts.zoneMin >= goals.zoneMin,
+      yogaMin: counts.yogaMin >= goals.yogaMin,
     };
     weeks.push({
       week: key,
@@ -357,7 +360,7 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
       counts,
       goals,
       met,
-      all: ['runs', 'strength', 'other', 'zoneMin'].every((k) => goals[k] <= 0 || met[k]),
+      all: ['runs', 'strength', 'other', 'zoneMin', 'yogaMin'].every((k) => goals[k] <= 0 || met[k]),
     });
   }
   return weeks;
@@ -379,6 +382,9 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
       { minutes: 0, runMetres: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, walkMetres: 0, sessions: 0 };
     m.minutes += w.durationMin ?? 0;
     m.sessions += 1;
+    const bucket = kpiBucket(w);
+    m.mix = m.mix ?? { runs: 0, strength: 0, other: 0 };
+    m.mix[bucket] += 1;
     if (w.type === 37 && w.metres) {
       m.runMetres += w.metres;
       m.runMinutes += w.durationMin ?? 0;
@@ -413,6 +419,8 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
       runHrMinutes: m.runHrMinutes,
       runs: m.runs ?? 0,
       avgRunKm: m.runs ? Math.round((m.runMetres / 1000 / m.runs) * 10) / 10 : null,
+      mix: m.mix ?? { runs: 0, strength: 0, other: 0 },
+      avgMin: m.sessions ? Math.round(m.minutes / m.sessions) : null,
       // Distance-weighted: total running time over total running distance.
       pace: m.runMetres >= 500 ? m.runMinutes / (m.runMetres / 1000) : null,
       // Time-weighted average heart rate across the month's runs.
@@ -572,4 +580,27 @@ export function withEventDividers(rows, events, dateOf) {
     out.push({ row });
   }
   return out;
+}
+
+/** Each activity type over a window: sessions, total minutes, average length. */
+export function byActivity(workouts, days = 365) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const from = cutoff.toISOString().slice(0, 10);
+  const totals = new Map();
+  for (const w of workouts ?? []) {
+    if (w.date < from) continue;
+    const t = totals.get(w.type) ?? { type: w.type, sessions: 0, minutes: 0 };
+    t.sessions += 1;
+    t.minutes += w.durationMin ?? 0;
+    totals.set(w.type, t);
+  }
+  return [...totals.values()]
+    .map((t) => ({
+      ...t,
+      ...describeType(t.type),
+      minutes: Math.round(t.minutes),
+      avgMin: Math.round(t.minutes / t.sessions),
+    }))
+    .sort((a, b) => b.minutes - a.minutes);
 }
