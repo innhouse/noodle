@@ -16,7 +16,7 @@ import {
   formatDuration,
   formatKm,
   formatPace,
-  minutesThisWeek,
+  exerciseMinutesThisWeek,
   onDay,
 } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
@@ -68,8 +68,8 @@ export default function TodayScreen() {
   const resting = againstBaseline(series?.restingHeartRate);
   const hrv = againstBaseline(series?.hrv);
   const gain = suddenGain(weights);
-  const target = profile?.weeklyMinutesTarget ?? 150;
-  const thisWeek = minutesThisWeek(workouts);
+  const target = profile?.weeklyMinutesTarget ?? 630;
+  const thisWeek = exerciseMinutesThisWeek(series?.exerciseMinutes, workouts);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

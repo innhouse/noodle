@@ -64,7 +64,7 @@ export default function SettingsScreen() {
       heightCm: feetInchesToCm(draft.feet, draft.inches) ?? null,
       age: Number(draft.age) || null,
       syncHealthWeight: draft.syncHealthWeight !== false,
-      weeklyMinutesTarget: Number(draft.weeklyMinutesTarget) || 150,
+      weeklyMinutesTarget: Number(draft.weeklyMinutesTarget) || 630,
     });
     setSaved(true);
   }
@@ -130,11 +130,11 @@ export default function SettingsScreen() {
         <Text style={styles.cardTitle}>Training</Text>
         <Field
           label="Weekly exercise target (minutes)"
-          value={String(draft.weeklyMinutesTarget ?? 150)}
+          value={String(draft.weeklyMinutesTarget ?? 630)}
           onChangeText={(text) => set({ weeklyMinutesTarget: text })}
           keyboardType="number-pad"
-          placeholder="150"
-          hint="Whatever your rehab program set. The Today and Workouts tabs show this week against it."
+          placeholder="630"
+          hint="Your Fitness Exercise-ring goal times seven (90 min/day = 630). Noodle can read the ring's minutes from Health but not its goal, so this one number is kept by hand."
         />
       </Card>
 
