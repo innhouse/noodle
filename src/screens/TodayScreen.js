@@ -35,7 +35,7 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  */
 export default function TodayScreen() {
   const { user, profile } = useAuth();
-  const { series, workouts: recorded, loading, denied, capturedAt } = useHealthData();
+  const { series, workouts: recorded, loading, refreshing, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
   const workouts = applyNotes(recorded, notes);
   const [weights, setWeights] = useState([]);
@@ -76,6 +76,7 @@ export default function TodayScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Today</Text>
       <Text style={styles.subtitle}>{longDate()}</Text>
+      {refreshing ? <Text style={styles.refreshNote}>Updating from Apple Health…</Text> : null}
 
       {denied ? (
         <Empty
@@ -299,6 +300,7 @@ const styles = StyleSheet.create({
 
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md },
+  refreshNote: { fontSize: fonts.tiny, color: colors.inkSoft, marginBottom: spacing.sm },
   syncNote: {
     fontSize: fonts.tiny,
     color: colors.accent,
