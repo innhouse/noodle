@@ -143,9 +143,12 @@ export function beatsPerKm(workout) {
  * The last `count` outdoor runs and walks with an efficiency reading, oldest
  * first, plus how the recent ones compare with the earlier ones.
  */
-export function efficiencyTrend(workouts, count = 10) {
+export const ON_FOOT = { runs: [37], walks: [52, 24], all: [37, 52, 24] };
+
+export function efficiencyTrend(workouts, count = 10, which = 'all') {
+  const types = ON_FOOT[which] ?? ON_FOOT.all;
   const sessions = (workouts ?? [])
-    .filter((w) => (w.type === 37 || w.type === 52 || w.type === 24) && beatsPerKm(w))
+    .filter((w) => types.includes(w.type) && beatsPerKm(w))
     .sort((a, b) => a.start.localeCompare(b.start))
     .slice(-count)
     .map((w) => ({ ...w, beatsPerKm: beatsPerKm(w) }));

@@ -10,6 +10,7 @@ import {
   beatsPerKm,
   describeType,
   efficiencyTrend,
+  ON_FOOT,
   formatDuration,
   formatKm,
   formatPace,
@@ -20,7 +21,7 @@ import {
 } from '../lib/workouts';
 import { BarChart, TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
-import { Card, Empty, Pill } from '../ui';
+import { Card, Empty, Pill, Segmented } from '../ui';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -34,6 +35,7 @@ export default function WorkoutsScreen() {
   const { workouts, loading, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
   const [noting, setNoting] = useState(null);
+  const [footType, setFootType] = useState(null);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -52,7 +54,13 @@ export default function WorkoutsScreen() {
   const weeks = groupByWeek(workouts);
   const target = profile?.weeklyMinutesTarget ?? 150;
   const thisWeek = minutesThisWeek(workouts);
-  const efficiency = efficiencyTrend(workouts);
+  const hasRuns = workouts.some((w) => ON_FOOT.runs.includes(w.type) && beatsPerKm(w));
+  const hasWalks = workouts.some((w) => ON_FOOT.walks.includes(w.type) && beatsPerKm(w));
+  // Default to the split view when both exist; a walk costs fewer beats per km
+  // than a run, so a combined line would track the mix rather than fitness.
+  const which = footType ?? (hasRuns && hasWalks ? 'runs' : 'all');
+  const efficiency = efficiencyTrend(workouts, 10, which);
+  const efficiencyAny = efficiencyTrend(workouts, 10, 'all');
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -111,20 +119,36 @@ export default function WorkoutsScreen() {
         </Card>
       ) : null}
 
-      {efficiency.sessions.length >= 2 ? (
+      {efficiencyAny.sessions.length >= 2 ? (
         <Card>
           <Text style={styles.effTitle}>Heartbeats per kilometre</Text>
           <Text style={styles.effBody}>
-            How much heart it took to cover the ground on your last{' '}
-            {efficiency.sessions.length} runs and walks. Lower means the same distance is costing
-            fewer beats — the fitness measure that still works on a beta-blocker.
+            How much heart it took to cover the ground. Lower means the same distance is costing
+            fewer beats — the fitness measure that still works on a beta-blocker. Runs and walks
+            are best read apart: a walk costs fewer beats than a run.
           </Text>
+          {hasRuns && hasWalks ? (
+            <Segmented
+              options={[
+                { label: 'Runs', value: 'runs' },
+                { label: 'Walks', value: 'walks' },
+                { label: 'Combined', value: 'all' },
+              ]}
+              value={which}
+              onChange={setFootType}
+              style={styles.segmented}
+            />
+          ) : null}
+          {efficiency.sessions.length >= 2 ? (
           <TimeChart
             points={efficiency.sessions.map((w) => ({ date: w.date, value: w.beatsPerKm }))}
             band={null}
             outside="none"
             format={(v) => String(Math.round(v))}
           />
+          ) : (
+            <Text style={styles.effTrend}>Not enough {which === 'all' ? 'sessions' : which} yet.</Text>
+          )}
           {efficiency.change != null ? (
             <Text style={styles.effTrend}>
               Recent average {Math.round(efficiency.recent)} vs {Math.round(efficiency.earlier)}{' '}
@@ -285,6 +309,7 @@ const styles = StyleSheet.create({
 
   effTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
   effBody: { fontSize: fonts.tiny, color: colors.inkSoft, lineHeight: 17, marginTop: spacing.xs },
+  segmented: { marginTop: spacing.md },
   effTrend: { fontSize: fonts.small, color: colors.ink, marginTop: spacing.md, lineHeight: 20 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
