@@ -246,29 +246,14 @@ export default function SettingsScreen() {
           placeholder="10"
           hint="Consecutive days with at least one run of this distance. The Workouts tab shows your current and longest streaks."
         />
-        <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
-          Monthly targets, if you want them. Leave at 0 for totals only.
-        </Text>
-        <View style={styles.kpiRow}>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="Minutes / month"
-              value={String(draft.monthlyMinutes ?? '')}
-              onChangeText={(text) => set({ monthlyMinutes: text })}
-              keyboardType="number-pad"
-              placeholder="0"
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="Km run / month"
-              value={String(draft.monthlyRunKm ?? '')}
-              onChangeText={(text) => set({ monthlyRunKm: text })}
-              keyboardType="decimal-pad"
-              placeholder="0"
-            />
-          </View>
-        </View>
+        <Field
+          label="Km run / month"
+          value={String(draft.monthlyRunKm ?? '')}
+          onChangeText={(text) => set({ monthlyRunKm: text })}
+          keyboardType="decimal-pad"
+          placeholder="0"
+          hint="Monthly running target, if you want one. Months that reach it get a tick. Leave at 0 for none."
+        />
         <Field
           label="Weekly exercise target (minutes)"
           value={String(draft.weeklyMinutesTarget ?? 630)}
