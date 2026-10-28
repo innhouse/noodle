@@ -11,7 +11,7 @@
  *
  * Both screens that show health data use this, so neither can drift from the other.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
@@ -24,12 +24,15 @@ import {
 } from './store';
 
 const SERIES_DAYS = 90;
-const WORKOUT_DAYS = 365;
+const WORKOUT_DAYS = 365 * 5;
 
 export function useHealthData() {
   const { user, profile } = useAuth();
   const [series, setSeries] = useState(null);
   const [workouts, setWorkouts] = useState(null);
+  // The latest mirrored list, readable from inside the Health read without
+  // re-running it every time the list changes.
+  const workoutsRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
   const [capturedAt, setCapturedAt] = useState(null);
@@ -39,7 +42,10 @@ export function useHealthData() {
   // one read.
   useEffect(() => {
     if (!user) return undefined;
-    return watchWorkouts(user.uid, setWorkouts);
+    return watchWorkouts(user.uid, (list) => {
+      workoutsRef.current = list;
+      setWorkouts(list);
+    });
   }, [user]);
 
   useEffect(() => {
@@ -72,9 +78,10 @@ export function useHealthData() {
         profile?.zone1Low != null && profile?.zone1High != null
           ? { low: Number(profile.zone1Low), high: Number(profile.zone1High) }
           : null;
+      const known = new Map((workoutsRef.current ?? []).map((w) => [w.id, w]));
       const [data, sessions] = await Promise.all([
         healthSeries(SERIES_DAYS),
-        workoutsSince(since, { zone }),
+        workoutsSince(since, { zone, known }),
       ]);
       if (cancelled) return;
       setSeries(data);
@@ -92,8 +99,13 @@ export function useHealthData() {
       saveHealthSnapshot(user.uid, data).catch((error) =>
         console.warn('health snapshot save failed', error)
       );
-      if (sessions.length) {
-        saveWorkouts(user.uid, sessions).catch((error) =>
+      // Write only what is new or changed; the rest is already in the account.
+      const changed = sessions.filter((w) => {
+        const before = known.get(w.id);
+        return !before || before.zoneMin !== w.zoneMin || before.avgHr !== w.avgHr;
+      });
+      if (changed.length) {
+        saveWorkouts(user.uid, changed).catch((error) =>
           console.warn('workout save failed', error)
         );
       }

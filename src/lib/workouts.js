@@ -488,3 +488,40 @@ export function formatPaceMin(perKm) {
   if (seconds === 60) return `${whole + 1}:00`;
   return `${whole}:${String(seconds).padStart(2, '0')}`;
 }
+
+/** Totals per calendar year, newest first, same columns as the months. */
+export function yearlyTotals(workouts) {
+  const months = monthlyTotals(workouts, {}, 12 * 6);
+  const byYear = new Map();
+  for (const m of months) {
+    const year = m.month.slice(0, 4);
+    const y = byYear.get(year) ?? { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, walkKm: 0, sessions: 0, current: false };
+    y.minutes += m.minutes;
+    y.runKm += m.runKm;
+    y.runMinutes += m.runMinutes;
+    y.runBeats += m.runBeats;
+    y.runHrMinutes += m.runHrMinutes;
+    y.walkKm += m.walkKm;
+    y.sessions += m.sessions;
+    y.current = y.current || m.current;
+    byYear.set(year, y);
+  }
+  const round1 = (v) => Math.round(v * 10) / 10;
+  return [...byYear.entries()]
+    .filter(([, y]) => y.sessions > 0)
+    .map(([year, y]) => ({
+      year,
+      current: y.current,
+      minutes: y.minutes,
+      runKm: round1(y.runKm),
+      walkKm: round1(y.walkKm),
+      sessions: y.sessions,
+      pace: y.runKm >= 0.5 ? y.runMinutes / y.runKm : null,
+      avgHr: y.runHrMinutes > 0 ? Math.round(y.runBeats / y.runHrMinutes) : null,
+      beatsPerKm:
+        y.runHrMinutes > 0 && y.runKm >= 0.5
+          ? Math.round(y.runBeats / (y.runKm * (y.runHrMinutes / y.runMinutes)))
+          : null,
+    }))
+    .sort((a, b) => b.year.localeCompare(a.year));
+}

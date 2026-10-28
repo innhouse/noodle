@@ -147,7 +147,7 @@ export async function activeEnergyForDay(day) {
  * a choice made here.
  */
 export async function workoutsSince(since, options = {}) {
-  const { zone = null, zoneDays = 60 } = options;
+  const { zone = null, zoneDays = 60, known = null } = options;
   let workouts;
   try {
     workouts = await queryWorkoutSamples({
@@ -171,6 +171,24 @@ export async function workoutsSince(since, options = {}) {
       const end = new Date(workout.endDate);
       const durationMin = quantityIn(workout.duration, 's') / 60;
       if (!(durationMin > 0)) continue;
+
+      // Already mirrored: reuse it rather than re-querying its heart rate, unless
+      // a zone has been set since and this session is recent enough to count.
+      const existing = known?.get?.(workout.uuid);
+      if (existing) {
+        const wantsZone =
+          zone?.low != null &&
+          zone?.high != null &&
+          end.getTime() > Date.now() - zoneDays * 86_400_000 &&
+          (existing.zoneMin == null || existing.zoneLow !== zone.low || existing.zoneHigh !== zone.high);
+        if (!wantsZone) {
+          results.push(existing);
+          continue;
+        }
+        const zoneMin = await minutesInZone(workout, zone);
+        results.push({ ...existing, zoneMin, zoneLow: zone.low, zoneHigh: zone.high });
+        continue;
+      }
 
       let avgHr = null;
       let maxHr = null;

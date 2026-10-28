@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '../charts';
-import { formatDuration, formatPaceMin, monthlySummary, monthlyTotals } from '../lib/workouts';
+import { formatDuration, formatPaceMin, monthlySummary, monthlyTotals, yearlyTotals } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
@@ -16,6 +16,7 @@ export default function MonthlyCard({ workouts, targets }) {
   const bars = [...months].reverse();
   const { ytd, average } = monthlySummary(months);
   const year = new Date().getFullYear();
+  const years = yearlyTotals(workouts);
 
   return (
     <Card>
@@ -31,7 +32,34 @@ export default function MonthlyCard({ workouts, targets }) {
         height={120}
       />
 
-      <Text style={styles.section}>Running</Text>
+      {years.length > 1 ? (
+        <>
+          <Text style={styles.section}>By year</Text>
+          <View style={[styles.row, styles.head]}>
+            <Text style={[styles.cell, styles.month, styles.headText]}>Year</Text>
+            <Text style={[styles.cell, styles.headText]}>Run km</Text>
+            <Text style={[styles.cell, styles.headText]}>Pace</Text>
+            <Text style={[styles.cell, styles.headText]}>Avg HR</Text>
+            <Text style={[styles.cell, styles.headText]}>Beats/km</Text>
+            <Text style={[styles.cell, styles.headText]}>Hours</Text>
+          </View>
+          {years.map((y) => (
+            <View key={y.year} style={styles.row}>
+              <Text style={[styles.cell, styles.month]}>
+                {y.year}
+                {y.current ? <Text style={styles.partial}> so far</Text> : null}
+              </Text>
+              <Text style={styles.cell}>{y.runKm}</Text>
+              <Text style={styles.cell}>{formatPaceMin(y.pace)}</Text>
+              <Text style={styles.cell}>{y.avgHr ?? '—'}</Text>
+              <Text style={styles.cell}>{y.beatsPerKm ?? '—'}</Text>
+              <Text style={styles.cell}>{Math.round(y.minutes / 60)}</Text>
+            </View>
+          ))}
+        </>
+      ) : null}
+
+      <Text style={styles.section}>Running, by month</Text>
       <View style={[styles.row, styles.head]}>
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
         <Text style={[styles.cell, styles.headText]}>Km</Text>
@@ -57,7 +85,7 @@ export default function MonthlyCard({ workouts, targets }) {
       <SummaryRow label={`${year} to date`} cells={[ytd.runKm, formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
       <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
 
-      <Text style={styles.section}>All activity</Text>
+      <Text style={styles.section}>All activity, by month</Text>
       <View style={[styles.row, styles.head]}>
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
         <Text style={[styles.cell, styles.headText]}>Minutes</Text>
