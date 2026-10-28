@@ -269,6 +269,19 @@ function round(value, decimals) {
   return Math.round(value * factor) / factor;
 }
 
+/**
+ * The night a sleep segment belongs to, named by the morning it ends on.
+ *
+ * A segment that ends before noon belongs to that day's night; one that ends
+ * after noon (the first hours of sleep, before midnight) belongs to the next
+ * day's. Keying by the segment's own date would split a 9pm–7am night in two.
+ */
+function nightKey(date) {
+  const d = new Date(date);
+  if (d.getHours() >= 12) d.setDate(d.getDate() + 1);
+  return localDayKey(d);
+}
+
 function localDayKey(date) {
   const d = new Date(date);
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -322,7 +335,8 @@ async function dailySeries(metric, days) {
  * Sleep per night, in hours, with the stage breakdown where the watch recorded one.
  *
  * A night is filed under the day you woke up, not the evening you went to bed, since
- * that is the day it affects — you eat breakfast tired, not the night before.
+ * that is the day it affects. Segments before midnight are filed forward to the
+ * morning they lead to, so a 9pm–7am night is one night, not two half-nights.
  *
  * Only genuine sleep counts. HealthKit also logs "in bed" and "awake" segments, and
  * including them would turn a broken night into a long one.
@@ -343,7 +357,7 @@ async function sleepSeries(days) {
     const hours = (end - start) / 3_600_000;
     if (!Number.isFinite(hours) || hours <= 0) continue;
 
-    const key = localDayKey(sample.endDate);
+    const key = nightKey(sample.endDate);
     const night = byNight.get(key) ?? { total: 0, core: 0, deep: 0, rem: 0 };
     night.total += hours;
     const stage = SLEEP_STAGES[sample.value];
