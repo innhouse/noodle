@@ -308,3 +308,57 @@ export function exerciseMinutesThisWeek(series, workouts) {
   const weeks = weeklyExerciseMinutes(series, workouts, 1);
   return weeks[0]?.value ?? 0;
 }
+
+export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, zoneMin: 0 };
+
+/** Which of the three weekly buckets a session falls in. */
+export function kpiBucket(workout) {
+  if (workout.type === 37) return 'runs';
+  if (describeType(workout.type).kind === 'strength') return 'strength';
+  return 'other';
+}
+
+/**
+ * Sessions per week in each bucket against the targets, newest week first.
+ *
+ * The question these answer is "did I do the mix I set out to", which minutes
+ * alone cannot: a week of six runs and no lifting hits the minutes and misses
+ * the plan. Walks, yoga, volleyball and the rest all count as "other".
+ */
+export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
+  const goals = { ...DEFAULT_KPIS, ...(targets ?? {}) };
+  const byWeek = new Map();
+  for (const w of workouts ?? []) {
+    const key = weekKey(w.date);
+    const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0 };
+    week[kpiBucket(w)] += 1;
+    week.zoneMin += w.zoneMin ?? 0;
+    byWeek.set(key, week);
+  }
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const weeks = [];
+  for (let i = 0; i < count; i += 1) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() - 7 * i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const counts = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0 };
+    const met = {
+      runs: counts.runs >= goals.runs,
+      strength: counts.strength >= goals.strength,
+      other: counts.other >= goals.other,
+      zoneMin: counts.zoneMin >= goals.zoneMin,
+    };
+    weeks.push({
+      week: key,
+      label: i === 0 ? 'This week' : i === 1 ? 'Last week' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      counts,
+      goals,
+      met,
+      all: ['runs', 'strength', 'other', 'zoneMin'].every((k) => goals[k] <= 0 || met[k]),
+    });
+  }
+  return weeks;
+}

@@ -34,6 +34,10 @@ export default function SettingsScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft({
       ...profile,
+      kpiRuns: profile?.kpis?.runs ?? 3,
+      kpiStrength: profile?.kpis?.strength ?? 2,
+      kpiOther: profile?.kpis?.other ?? 1,
+      kpiZoneMin: profile?.kpis?.zoneMin ?? 0,
       weightLb: displayLb(profile?.weightKg),
       feet: height.feet,
       inches: height.inches,
@@ -65,6 +69,14 @@ export default function SettingsScreen() {
       age: Number(draft.age) || null,
       syncHealthWeight: draft.syncHealthWeight !== false,
       weeklyMinutesTarget: Number(draft.weeklyMinutesTarget) || 630,
+      kpis: {
+        runs: Number(draft.kpiRuns) || 0,
+        strength: Number(draft.kpiStrength) || 0,
+        other: Number(draft.kpiOther) || 0,
+        zoneMin: Number(draft.kpiZoneMin) || 0,
+      },
+      zone1Low: Number(draft.zone1Low) || null,
+      zone1High: Number(draft.zone1High) || null,
     });
     setSaved(true);
   }
@@ -128,6 +140,73 @@ export default function SettingsScreen() {
 
       <Card>
         <Text style={styles.cardTitle}>Training</Text>
+        <Text style={styles.cardBody}>
+          Sessions per week you are aiming for. Runs are runs; strength is any lifting or
+          core session (Jefit included); other is everything else — walks, yoga, volleyball.
+        </Text>
+        <View style={styles.kpiRow}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Runs"
+              value={String(draft.kpiRuns ?? '')}
+              onChangeText={(text) => set({ kpiRuns: text })}
+              keyboardType="number-pad"
+              placeholder="3"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Strength"
+              value={String(draft.kpiStrength ?? '')}
+              onChangeText={(text) => set({ kpiStrength: text })}
+              keyboardType="number-pad"
+              placeholder="2"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Other"
+              value={String(draft.kpiOther ?? '')}
+              onChangeText={(text) => set({ kpiOther: text })}
+              keyboardType="number-pad"
+              placeholder="1"
+            />
+          </View>
+        </View>
+        <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
+          Zone 1 in beats per minute, as set on your watch or by your rehab program. Noodle
+          can’t read the watch’s zones, and on a beta-blocker the usual formulas are wrong, so
+          this is typed in. Leave blank to skip zone tracking.
+        </Text>
+        <View style={styles.kpiRow}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Zone 1 from (bpm)"
+              value={String(draft.zone1Low ?? '')}
+              onChangeText={(text) => set({ zone1Low: text })}
+              keyboardType="number-pad"
+              placeholder="95"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="to (bpm)"
+              value={String(draft.zone1High ?? '')}
+              onChangeText={(text) => set({ zone1High: text })}
+              keyboardType="number-pad"
+              placeholder="115"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Min / week"
+              value={String(draft.kpiZoneMin ?? '')}
+              onChangeText={(text) => set({ kpiZoneMin: text })}
+              keyboardType="number-pad"
+              placeholder="150"
+            />
+          </View>
+        </View>
         <Field
           label="Weekly exercise target (minutes)"
           value={String(draft.weeklyMinutesTarget ?? 630)}
@@ -200,6 +279,7 @@ const styles = StyleSheet.create({
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink, marginBottom: spacing.lg },
 
   heightRow: { flexDirection: 'row', gap: spacing.md },
+  kpiRow: { flexDirection: 'row', gap: spacing.sm },
   cardTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink, marginBottom: spacing.xs },
   cardBody: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md, lineHeight: 20 },
 
