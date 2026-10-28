@@ -21,6 +21,7 @@ import {
 } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
+import KpiCard from './KpiCard';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -135,6 +136,7 @@ export default function TodayScreen() {
           {Math.round(thisWeek)} of {target} min this week
         </Text>
       ) : null}
+      {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} compact /> : null}
 
       <Text style={styles.sectionHeading}>Last night</Text>
       {nightIsRecent ? (
@@ -219,9 +221,13 @@ function WorkoutCard({ workout, note, onPress }) {
             {workout.source ? ` · ${workout.source}` : ''}
           </Text>
           <Text style={styles.workoutDetails}>{details.join(' · ')}</Text>
-          {bpk || workout.hrr ? (
+          {bpk || workout.hrr || workout.zoneMin != null ? (
             <Text style={styles.workoutExtra}>
-              {[bpk ? `${bpk} beats/km` : null, workout.hrr ? `recovery −${workout.hrr} bpm` : null]
+              {[
+                bpk ? `${bpk} beats/km` : null,
+                workout.hrr ? `recovery −${workout.hrr} bpm` : null,
+                workout.zoneMin != null ? `${workout.zoneMin} min in zone 1` : null,
+              ]
                 .filter(Boolean)
                 .join(' · ')}
             </Text>

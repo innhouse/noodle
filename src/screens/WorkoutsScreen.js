@@ -23,6 +23,7 @@ import {
 import { BarChart, TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill, Segmented } from '../ui';
+import KpiCard from './KpiCard';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -97,6 +98,8 @@ export default function WorkoutsScreen() {
           }
         />
       ) : null}
+
+      {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
 
       {workouts.length ? (
         <Card>
@@ -237,9 +240,13 @@ function WorkoutRow({ workout, note, onPress }) {
             {workout.source ? ` · ${workout.source}` : ''}
           </Text>
           <Text style={styles.rowDetails}>{details.join(' · ')}</Text>
-          {bpk || workout.hrr ? (
+          {bpk || workout.hrr || workout.zoneMin != null ? (
             <Text style={styles.rowExtra}>
-              {[bpk ? `${bpk} beats/km` : null, workout.hrr ? `recovery −${workout.hrr} bpm` : null]
+              {[
+                bpk ? `${bpk} beats/km` : null,
+                workout.hrr ? `recovery −${workout.hrr} bpm` : null,
+                workout.zoneMin != null ? `${workout.zoneMin} min in zone 1` : null,
+              ]
                 .filter(Boolean)
                 .join(' · ')}
             </Text>

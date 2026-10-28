@@ -27,7 +27,7 @@ const SERIES_DAYS = 90;
 const WORKOUT_DAYS = 365;
 
 export function useHealthData() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [series, setSeries] = useState(null);
   const [workouts, setWorkouts] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -68,7 +68,14 @@ export function useHealthData() {
 
       const since = new Date();
       since.setDate(since.getDate() - WORKOUT_DAYS);
-      const [data, sessions] = await Promise.all([healthSeries(SERIES_DAYS), workoutsSince(since)]);
+      const zone =
+        profile?.zone1Low != null && profile?.zone1High != null
+          ? { low: Number(profile.zone1Low), high: Number(profile.zone1High) }
+          : null;
+      const [data, sessions] = await Promise.all([
+        healthSeries(SERIES_DAYS),
+        workoutsSince(since, { zone }),
+      ]);
       if (cancelled) return;
       setSeries(data);
       setLoading(false);
@@ -77,7 +84,7 @@ export function useHealthData() {
       // which is the common case when the tab is reopened within a few minutes.
       const fingerprint = JSON.stringify([
         Object.entries(data).map(([key, points]) => [key, points.length, points.at(-1)?.value]),
-        sessions.map((s) => [s.id, s.durationMin, s.avgHr]),
+        sessions.map((s) => [s.id, s.durationMin, s.avgHr, s.zoneMin]),
       ]);
       if (fingerprint === lastSynced) return;
       lastSynced = fingerprint;
@@ -101,7 +108,7 @@ export function useHealthData() {
       cancelled = true;
       subscription.remove();
     };
-  }, [user]);
+  }, [user, profile?.zone1Low, profile?.zone1High]);
 
   return { series, workouts: workouts ?? [], loading, denied, capturedAt };
 }

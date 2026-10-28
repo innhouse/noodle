@@ -146,7 +146,8 @@ export async function activeEnergyForDay(day) {
  * a duration and a heart-rate trace and nothing more. That is Health's limit, not
  * a choice made here.
  */
-export async function workoutsSince(since) {
+export async function workoutsSince(since, options = {}) {
+  const { zone = null, zoneDays = 60 } = options;
   let workouts;
   try {
     workouts = await queryWorkoutSamples({
@@ -181,6 +182,14 @@ export async function workoutsSince(since) {
         // No heart-rate samples for this session; common for phone-only entries.
       }
 
+      // Minutes inside the person's own zone 1, from the session's heart-rate
+      // trace. Only for recent sessions — each needs its own query — and only
+      // when a zone has been set, since a guessed zone would be worse than none.
+      let zoneMin = null;
+      if (zone?.low != null && zone?.high != null && end.getTime() > Date.now() - zoneDays * 86_400_000) {
+        zoneMin = await minutesInZone(workout, zone);
+      }
+
       const metadata = workout.metadata ?? {};
       results.push({
         id: workout.uuid,
@@ -196,6 +205,9 @@ export async function workoutsSince(since) {
         avgHr: avgHr == null ? null : Math.round(avgHr),
         maxHr: maxHr == null ? null : Math.round(maxHr),
         hrr: recoveryFor(recoveries, end),
+        zoneMin,
+        zoneLow: zoneMin == null ? null : zone.low,
+        zoneHigh: zoneMin == null ? null : zone.high,
         indoor: metadata.HKIndoorWorkout === true || metadata.HKIndoorWorkout === 1,
         source: sourceName(workout, metadata),
       });
@@ -204,6 +216,36 @@ export async function workoutsSince(since) {
     }
   }
   return results;
+}
+
+/**
+ * Minutes of a session spent with heart rate inside [low, high].
+ *
+ * Heart-rate samples are instants, so each one stands for the time until the
+ * next sample, capped at a minute so a gap in the trace is not counted as time
+ * in zone.
+ */
+async function minutesInZone(workout, zone) {
+  try {
+    const samples = await queryQuantitySamples(HEART_RATE, {
+      limit: 0,
+      ascending: true,
+      unit: 'count/min',
+      filter: { date: { startDate: new Date(workout.startDate), endDate: new Date(workout.endDate) } },
+    });
+    const list = (samples ?? [])
+      .map((s) => ({ at: new Date(s.startDate).getTime(), bpm: s.quantity }))
+      .filter((s) => typeof s.bpm === 'number');
+    if (list.length < 2) return null;
+    let seconds = 0;
+    for (let i = 0; i < list.length - 1; i += 1) {
+      const gap = Math.min(60_000, list[i + 1].at - list[i].at);
+      if (list[i].bpm >= zone.low && list[i].bpm <= zone.high) seconds += gap / 1000;
+    }
+    return Math.round(seconds / 60);
+  } catch {
+    return null;
+  }
 }
 
 async function recoverySamplesSince(since) {
