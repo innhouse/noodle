@@ -4,7 +4,7 @@ import { weeklyKpis } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
-const LABELS = { runs: 'Runs', strength: 'Strength', other: 'Other', zoneMin: 'Zone 1 min' };
+const LABELS = { runs: 'Runs', strength: 'Strength', other: 'Other', zoneMin: 'Zone 1 min', yogaMin: 'Yoga min' };
 
 /**
  * The week's mix against the plan: runs, strength sessions and other activity,
@@ -18,7 +18,7 @@ export default function KpiCard({ workouts, kpis, history = 8, compact = false }
   const weeks = weeklyKpis(workouts, kpis, compact ? 1 : history);
   const current = weeks[0];
   const goals = current.goals;
-  const keys = ['runs', 'strength', 'other', 'zoneMin'].filter((k) => goals[k] > 0);
+  const keys = ['runs', 'strength', 'other', 'yogaMin', 'zoneMin'].filter((k) => goals[k] > 0);
   if (!keys.length) return null;
 
   return (
