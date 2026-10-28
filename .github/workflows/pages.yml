@@ -1,6 +1,8 @@
-# Publishes the web build to https://innhouse.github.io/noodle on every push to
-# master. Needs Settings → Pages → Source set to "GitHub Actions" once.
-name: Deploy web app to GitHub Pages
+# On every push to master: publishes the web build to
+# https://innhouse.github.io/noodle (needs Settings → Pages → Source set to
+# "GitHub Actions" once) and ships the phone update over the air through EAS
+# Update (needs an EXPO_TOKEN repository secret, from expo.dev → Access tokens).
+name: Deploy web app and phone update
 
 on:
   push:
@@ -44,3 +46,22 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  phone:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Publish the over-the-air update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "No EXPO_TOKEN secret set; skipping the phone update." && exit 0
+          fi
+          npx eas-cli@latest update --channel production --non-interactive --auto
