@@ -510,13 +510,18 @@ export function yearlyTotals(workouts) {
   const byYear = new Map();
   for (const m of months) {
     const year = m.month.slice(0, 4);
-    const y = byYear.get(year) ?? { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0, current: false };
+    const y =
+      byYear.get(year) ??
+      { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0, mix: { runs: 0, strength: 0, other: 0 }, current: false };
     y.minutes += m.minutes;
     y.runKm += m.runKm;
     y.runMinutes += m.runMinutes;
     y.runBeats += m.runBeats;
     y.runHrMinutes += m.runHrMinutes;
     y.runs += m.runs ?? 0;
+    y.mix.runs += m.mix?.runs ?? 0;
+    y.mix.strength += m.mix?.strength ?? 0;
+    y.mix.other += m.mix?.other ?? 0;
     y.walkKm += m.walkKm;
     y.sessions += m.sessions;
     y.current = y.current || m.current;
@@ -533,6 +538,8 @@ export function yearlyTotals(workouts) {
       avgRunKm: y.runs ? round1(y.runKm / y.runs) : null,
       walkKm: round1(y.walkKm),
       sessions: y.sessions,
+      mix: y.mix,
+      avgMin: y.sessions ? Math.round(y.minutes / y.sessions) : null,
       pace: y.runKm >= 0.5 ? y.runMinutes / y.runKm : null,
       avgHr: y.runHrMinutes > 0 ? Math.round(y.runBeats / y.runHrMinutes) : null,
       beatsPerKm:

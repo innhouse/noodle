@@ -48,7 +48,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
 
       {years.length > 1 ? (
         <>
-          <Text style={styles.section}>By year</Text>
+          <Text style={styles.section}>Running, by year</Text>
           <View style={[styles.row, styles.head]}>
             <Text style={[styles.cell, styles.month, styles.headText]}>Year</Text>
             <Text style={[styles.cell, styles.headText]}>Run km</Text>
@@ -83,7 +83,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
         </>
       ) : null}
 
-      <Text style={styles.section}>By month</Text>
+      <Text style={styles.section}>Running, by month</Text>
       <View style={[styles.row, styles.head]}>
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
         <Text style={[styles.cell, styles.headText]}>Run km</Text>
@@ -122,6 +122,43 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
       )}
       <SummaryRow label={`${year} to date`} cells={[ytd.runKm, ytd.avgRunKm ?? '—', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
       <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, average.avgRunKm ?? '—', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
+
+      {years.length > 1 ? (
+        <>
+          <Text style={styles.section}>All activity, by year</Text>
+          <View style={[styles.row, styles.head]}>
+            <Text style={[styles.cell, styles.month, styles.headText]}>Year</Text>
+            <Text style={[styles.cell, styles.headText]}>Sess.</Text>
+            <Text style={[styles.cell, styles.headText]}>Run</Text>
+            <Text style={[styles.cell, styles.headText]}>Str.</Text>
+            <Text style={[styles.cell, styles.headText]}>Other</Text>
+            <Text style={[styles.cell, styles.headText]}>Avg min</Text>
+            <Text style={[styles.cell, styles.headText]}>Hours</Text>
+          </View>
+          {withEventDividers(years, events, (y) => `${y.year}-12-31`).map((entry, i) =>
+            entry.divider ? (
+              <View key={`ayev${i}`} style={styles.divider}>
+                <Text style={styles.dividerText}>
+                  ▲ since {entry.divider.label} · {entry.divider.date}
+                </Text>
+              </View>
+            ) : (
+              <View key={`ay${entry.row.year}`} style={styles.row}>
+                <Text style={[styles.cell, styles.month]}>
+                  {entry.row.year}
+                  {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
+                </Text>
+                <Text style={styles.cell}>{entry.row.sessions}</Text>
+                <Text style={styles.cell}>{entry.row.mix.runs}</Text>
+                <Text style={styles.cell}>{entry.row.mix.strength}</Text>
+                <Text style={styles.cell}>{entry.row.mix.other}</Text>
+                <Text style={styles.cell}>{entry.row.avgMin ?? '—'}</Text>
+                <Text style={styles.cell}>{Math.round(entry.row.minutes / 60)}</Text>
+              </View>
+            )
+          )}
+        </>
+      ) : null}
 
       <Text style={styles.section}>All activity, by month</Text>
       <View style={[styles.row, styles.head]}>
