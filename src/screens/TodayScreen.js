@@ -10,6 +10,7 @@ import { describeAge, formatHours, useHealthData } from '../lib/useHealthData';
 import { suddenGain } from '../lib/weight';
 import {
   againstBaseline,
+  applyNotes,
   beatsPerKm,
   describeType,
   formatDuration,
@@ -33,8 +34,9 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  */
 export default function TodayScreen() {
   const { user, profile } = useAuth();
-  const { series, workouts, loading, denied, capturedAt } = useHealthData();
+  const { series, workouts: recorded, loading, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
+  const workouts = applyNotes(recorded, notes);
   const [weights, setWeights] = useState([]);
   const [noting, setNoting] = useState(null);
   const today = dayKey();

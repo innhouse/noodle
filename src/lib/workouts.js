@@ -212,3 +212,25 @@ export function weeklyMinutes(workouts, count = 12) {
   }
   return weeks;
 }
+
+export const FOOT_TYPES = [
+  { label: 'Run', value: 37 },
+  { label: 'Walk', value: 52 },
+  { label: 'Hike', value: 24 },
+];
+
+/**
+ * Sessions as the person says they happened.
+ *
+ * Health can't change a workout's type after the fact, so a run logged as a
+ * walk stays a walk there forever. The note the person writes against a session
+ * can carry a corrected type; this applies it so every screen and every trend
+ * sees the session as it really was. The Health copy is untouched.
+ */
+export function applyNotes(workouts, notes) {
+  if (!notes) return workouts ?? [];
+  return (workouts ?? []).map((w) => {
+    const override = notes[w.id]?.typeOverride;
+    return override ? { ...w, type: override, originalType: w.type } : w;
+  });
+}

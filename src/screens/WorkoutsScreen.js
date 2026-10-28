@@ -7,6 +7,7 @@ import { healthSupported } from '../lib/health';
 import { watchWorkoutNotes } from '../lib/store';
 import { describeAge, useHealthData } from '../lib/useHealthData';
 import {
+  applyNotes,
   beatsPerKm,
   describeType,
   efficiencyTrend,
@@ -32,8 +33,9 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  */
 export default function WorkoutsScreen() {
   const { user, profile } = useAuth();
-  const { workouts, loading, denied, capturedAt } = useHealthData();
+  const { workouts: recorded, loading, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
+  const workouts = applyNotes(recorded, notes);
   const [noting, setNoting] = useState(null);
   const [footType, setFootType] = useState(null);
 

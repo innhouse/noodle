@@ -4,9 +4,9 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useAuth } from '../context/AuthContext';
 import { formatDayLabel, formatTime } from '../lib/dates';
 import { saveWorkoutNote } from '../lib/store';
-import { describeType, formatDuration, SYMPTOMS } from '../lib/workouts';
+import { describeType, FOOT_TYPES, formatDuration, SYMPTOMS } from '../lib/workouts';
 import { colors, fonts, radius, spacing } from '../theme';
-import { Button } from '../ui';
+import { Button, Segmented } from '../ui';
 
 /**
  * How a session felt, in one tap each.
@@ -19,16 +19,20 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
   const { user } = useAuth();
   const [symptoms, setSymptoms] = useState([]);
   const [text, setText] = useState('');
+  const [typeOverride, setTypeOverride] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSymptoms(note?.symptoms ?? []);
     setText(note?.text ?? '');
+    setTypeOverride(note?.typeOverride ?? null);
   }, [note, workout?.id]);
 
   if (!workout) return null;
-  const type = describeType(workout.type);
+  const recordedType = workout.originalType ?? workout.type;
+  const type = describeType(typeOverride ?? recordedType);
+  const onFoot = FOOT_TYPES.some((t) => t.value === recordedType);
 
   function toggle(key) {
     setSymptoms((current) => {
@@ -41,7 +45,11 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
   async function save() {
     setSaving(true);
     try {
-      await saveWorkoutNote(user.uid, workout.id, { symptoms, text: text.trim() });
+      await saveWorkoutNote(user.uid, workout.id, {
+        symptoms,
+        text: text.trim(),
+        typeOverride: typeOverride && typeOverride !== recordedType ? typeOverride : null,
+      });
       onClose();
     } finally {
       setSaving(false);
@@ -58,6 +66,22 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
           {workout.avgHr ? ` · ${workout.avgHr} bpm avg` : ''}
         </Text>
 
+        {onFoot ? (
+          <>
+            <Text style={styles.label}>Recorded as</Text>
+            <Segmented
+              options={FOOT_TYPES}
+              value={typeOverride ?? recordedType}
+              onChange={(value) => setTypeOverride(value)}
+              style={styles.segmented}
+            />
+            <Text style={styles.hint}>
+              Health keeps whatever the watch recorded; Noodle uses what you choose here.
+            </Text>
+          </>
+        ) : null}
+
+        <Text style={styles.label}>How did it feel?</Text>
         <View style={styles.chips}>
           {SYMPTOMS.map((symptom) => {
             const on = symptoms.includes(symptom.key);
@@ -99,6 +123,9 @@ const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2, backgroundColor: colors.bg, flexGrow: 1 },
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.lg, lineHeight: 20 },
+  label: { fontSize: fonts.small, fontWeight: '700', color: colors.inkSoft, marginBottom: spacing.sm },
+  segmented: { marginBottom: spacing.xs },
+  hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginBottom: spacing.lg, lineHeight: 17 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
   chip: {
     paddingVertical: spacing.sm,
