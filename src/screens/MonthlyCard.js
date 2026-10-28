@@ -54,7 +54,7 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
         height={120}
         onBarPress={onMonthPress ? (bar) => onMonthPress(bar.month) : undefined}
       />
-      {onMonthPress ? <Text style={styles.tapHint}>Tap a bar or a month to see its sessions.</Text> : null}
+      {onMonthPress ? <Text style={styles.tapHint}>Tap a bar, a month or a year to see what was in it.</Text> : null}
 
       {years.length > 1 ? (
         <>
@@ -76,7 +76,11 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
                 </Text>
               </View>
             ) : (
-            <View key={entry.row.year} style={styles.row}>
+            <Pressable
+              key={entry.row.year}
+              style={styles.row}
+              onPress={onMonthPress ? () => onMonthPress(entry.row.year) : undefined}
+            >
               <Text style={[styles.cell, styles.month]}>
                 {entry.row.year}
                 {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
@@ -87,7 +91,7 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
               <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
               <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
               <Text style={styles.cell}>{Math.round(entry.row.minutes / 60)}</Text>
-            </View>
+            </Pressable>
             )
           )}
         </>
@@ -153,7 +157,11 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
                 </Text>
               </View>
             ) : (
-              <View key={`ay${entry.row.year}`} style={styles.row}>
+              <Pressable
+                key={`ay${entry.row.year}`}
+                style={styles.row}
+                onPress={onMonthPress ? () => onMonthPress(entry.row.year) : undefined}
+              >
                 <Text style={[styles.cell, styles.month]}>
                   {entry.row.year}
                   {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
@@ -164,7 +172,7 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
                 <Text style={styles.cell}>{entry.row.mix.other}</Text>
                 <Text style={styles.cell}>{entry.row.avgOtherMin ?? '—'}</Text>
                 <Text style={styles.cell}>{Math.round(entry.row.otherMinutes / 60)}</Text>
-              </View>
+              </Pressable>
             )
           )}
         </>

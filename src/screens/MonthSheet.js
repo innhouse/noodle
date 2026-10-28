@@ -14,7 +14,7 @@ import { colors, fonts, spacing } from '../theme';
 import { Button, Card } from '../ui';
 
 /**
- * One month, in two steps: first a summary per activity (runs, walks,
+ * One month or year, in two steps: first a summary per activity (runs, walks,
  * strength, yoga…), then — on tapping an activity — its sessions, each of
  * which opens its note sheet.
  */
@@ -22,8 +22,11 @@ export default function MonthSheet({ month, workouts, notes, onPick, onClose }) 
   const [type, setType] = useState(null);
   if (!month) return null;
 
+  // A month ("2026-10") or a whole year ("2025") — sessions match by prefix.
   const [y, m] = month.split('-').map(Number);
-  const title = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const title = m
+    ? new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    : String(y);
   const sessions = (workouts ?? [])
     .filter((w) => w.date.startsWith(month))
     .sort((a, b) => b.start.localeCompare(a.start));
