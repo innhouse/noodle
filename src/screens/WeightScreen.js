@@ -7,6 +7,7 @@ import { suddenGain, weeklyChange, weightTrend } from '../lib/weight';
 import { healthSupported, requestHealthAccess, weightSamplesSince } from '../lib/health';
 import { saveWeight, saveWeights, watchWeights } from '../lib/store';
 import { displayLb, kgToLb, lbToKg } from '../lib/units';
+import { TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Empty, Field } from '../ui';
 
@@ -140,6 +141,18 @@ export default function WeightScreen() {
 
       {trended.length > 1 ? (
         <>
+          <Text style={styles.sectionHeading}>Readings</Text>
+          <Card>
+            <TimeChart
+              points={trended.map((e) => ({ date: e.date, value: kgToLb(e.weightKg) }))}
+              band={null}
+              outside="none"
+              format={(v) => v.toFixed(1)}
+              labels="ends"
+            />
+            <Text style={styles.chartNote}>Scale readings in lb, with the trend through them.</Text>
+          </Card>
+
           <Text style={styles.sectionHeading}>Recent</Text>
           {[...trended]
             .reverse()
@@ -190,6 +203,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  chartNote: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, textAlign: 'center' },
   sectionHeading: {
     fontSize: fonts.small,
     fontWeight: '700',

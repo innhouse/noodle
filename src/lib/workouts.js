@@ -185,3 +185,27 @@ export const SYMPTOMS = [
 export function symptomLabel(key) {
   return SYMPTOMS.find((s) => s.key === key)?.label ?? key;
 }
+
+/** Minutes per week for the last `count` weeks, oldest first, zeros included. */
+export function weeklyMinutes(workouts, count = 12) {
+  const totals = new Map();
+  for (const w of workouts ?? []) {
+    const key = weekKey(w.date);
+    totals.set(key, (totals.get(key) ?? 0) + (w.durationMin ?? 0));
+  }
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const weeks = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() - 7 * i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    weeks.push({
+      label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      value: Math.round(totals.get(key) ?? 0),
+    });
+  }
+  return weeks;
+}

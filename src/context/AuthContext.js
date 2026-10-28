@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!firebaseReady) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return undefined;
     }
@@ -30,6 +31,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfile(null);
       return undefined;
     }

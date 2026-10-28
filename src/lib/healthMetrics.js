@@ -439,3 +439,27 @@ export function direction(change, betterWhen, threshold) {
   const improving = betterWhen === 'lower' ? change < 0 : change > 0;
   return improving ? 'better' : 'worse';
 }
+
+/**
+ * The person's own usual range for a metric: mean ± one standard deviation of
+ * the readings before the last week. "Usual for you" is the only range this app
+ * is entitled to draw for heart data; there are no population norms here.
+ */
+export function usualRange(series, excludeDays = 7, minReadings = 7) {
+  if (!series?.length) return null;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - excludeDays);
+  const from = cutoff.toISOString().slice(0, 10);
+  const earlier = series.filter((p) => p.date < from).map((p) => p.value);
+  if (earlier.length < minReadings) return null;
+  const mean = earlier.reduce((a, b) => a + b, 0) / earlier.length;
+  const sd = Math.sqrt(earlier.reduce((sum, v) => sum + (v - mean) ** 2, 0) / earlier.length);
+  return { low: mean - sd, high: mean + sd, mean, sd };
+}
+
+/** Which side of the usual range is unwelcome, for the chart's orange zone. */
+export function unwelcomeSide(betterWhen) {
+  if (betterWhen === 'lower') return 'above';
+  if (betterWhen === 'higher') return 'below';
+  return 'none';
+}

@@ -16,7 +16,9 @@ import {
   groupByWeek,
   minutesThisWeek,
   symptomLabel,
+  weeklyMinutes,
 } from '../lib/workouts';
+import { BarChart, TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
@@ -101,8 +103,10 @@ export default function WorkoutsScreen() {
               ]}
             />
           </View>
+          <BarChart bars={weeklyMinutes(workouts, 12)} target={target} />
           <Text style={styles.targetHint}>
-            Weekly minutes against the target in Settings. Steady weeks beat big ones.
+            Minutes per week for the last twelve, against the target in Settings. Steady weeks
+            beat big ones.
           </Text>
         </Card>
       ) : null}
@@ -115,20 +119,12 @@ export default function WorkoutsScreen() {
             {efficiency.sessions.length} runs and walks. Lower means the same distance is costing
             fewer beats — the fitness measure that still works on a beta-blocker.
           </Text>
-          <View style={styles.bars}>
-            {efficiency.sessions.map((w) => {
-              const max = Math.max(...efficiency.sessions.map((x) => x.beatsPerKm));
-              return (
-                <View key={w.id} style={styles.barCol}>
-                  <Text style={styles.barValue}>{w.beatsPerKm}</Text>
-                  <View style={styles.barTrack}>
-                    <View style={[styles.bar, { height: `${(w.beatsPerKm / max) * 100}%` }]} />
-                  </View>
-                  <Text style={styles.barLabel}>{w.date.slice(5).replace('-', '/')}</Text>
-                </View>
-              );
-            })}
-          </View>
+          <TimeChart
+            points={efficiency.sessions.map((w) => ({ date: w.date, value: w.beatsPerKm }))}
+            band={null}
+            outside="none"
+            format={(v) => String(Math.round(v))}
+          />
           {efficiency.change != null ? (
             <Text style={styles.effTrend}>
               Recent average {Math.round(efficiency.recent)} vs {Math.round(efficiency.earlier)}{' '}
@@ -289,12 +285,6 @@ const styles = StyleSheet.create({
 
   effTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
   effBody: { fontSize: fonts.tiny, color: colors.inkSoft, lineHeight: 17, marginTop: spacing.xs },
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 120, marginTop: spacing.md },
-  barCol: { flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' },
-  barValue: { fontSize: 10, color: colors.inkSoft, marginBottom: 2 },
-  barTrack: { flex: 1, width: '100%', justifyContent: 'flex-end' },
-  bar: { backgroundColor: colors.primary, borderRadius: 4, width: '100%' },
-  barLabel: { fontSize: 9, color: colors.inkSoft, marginTop: 4 },
   effTrend: { fontSize: fonts.small, color: colors.ink, marginTop: spacing.md, lineHeight: 20 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

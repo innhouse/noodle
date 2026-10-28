@@ -38,9 +38,9 @@ function Shell() {
   if (!firebaseReady) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.setupTitle}>Firebase isn't configured yet</Text>
+        <Text style={styles.setupTitle}>Firebase isn’t configured yet</Text>
         <Text style={styles.setupBody}>
-          Paste your project's web config into firebaseConfig.js, then reload. See SETUP.md.
+          Paste your project’s web config into firebaseConfig.js, then reload. See SETUP.md.
         </Text>
       </View>
     );

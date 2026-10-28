@@ -1,14 +1,25 @@
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { formatDayLabel } from '../lib/dates';
 import { healthSupported } from '../lib/health';
-import { direction, HEALTH_METRICS, latest, METRIC_GROUPS, trend } from '../lib/healthMetrics';
+import {
+  direction,
+  HEALTH_METRICS,
+  latest,
+  METRIC_GROUPS,
+  trend,
+  unwelcomeSide,
+  usualRange,
+} from '../lib/healthMetrics';
 import { describeAge, formatHours, useHealthData } from '../lib/useHealthData';
+import { TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
 
 export default function HealthScreen() {
   const { series, loading, denied, capturedAt } = useHealthData();
+  const [open, setOpen] = useState(null);
 
   if (loading) {
     return (
@@ -126,6 +137,17 @@ export default function HealthScreen() {
                 unit="per night"
                 value={formatHours(meanOf(sleep))}
                 meta={`${sleep.length} nights · latest ${formatDayLabel(lastNight.date)}`}
+                open={open === 'sleep'}
+                onPress={() => setOpen(open === 'sleep' ? null : 'sleep')}
+                chart={
+                  <TimeChart
+                    points={sleep}
+                    band={usualRange(sleep)}
+                    outside="below"
+                    format={(v) => formatHours(v)}
+                    labels="ends"
+                  />
+                }
               />
             ) : null}
 
@@ -146,6 +168,17 @@ export default function HealthScreen() {
                       ? { tone: pillTone(metricTrend.change, key), text: describe(metricTrend.change, key) }
                       : null
                   }
+                  open={open === key}
+                  onPress={() => setOpen(open === key ? null : key)}
+                  chart={
+                    <TimeChart
+                      points={series[key]}
+                      band={usualRange(series[key])}
+                      outside={unwelcomeSide(HEALTH_METRICS[key].betterWhen)}
+                      format={(v) => format(v, key)}
+                      labels="ends"
+                    />
+                  }
                 />
               );
             })}
@@ -163,23 +196,38 @@ export default function HealthScreen() {
   );
 }
 
-function MetricRow({ label, unit, value, meta, pill }) {
+function MetricRow({ label, unit, value, meta, pill, open, onPress, chart }) {
   return (
-    <Card style={styles.row}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowMeta}>{meta}</Text>
-        {pill ? (
-          <View style={styles.pillWrap}>
-            <Pill tone={pill.tone}>{pill.text} this week</Pill>
+    <Pressable onPress={onPress}>
+      <Card>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>{label}</Text>
+            <Text style={styles.rowMeta}>{meta}</Text>
+            {pill ? (
+              <View style={styles.pillWrap}>
+                <Pill tone={pill.tone}>{pill.text} this week</Pill>
+              </View>
+            ) : null}
           </View>
-        ) : null}
-      </View>
-      <View style={styles.rowValueBlock}>
-        <Text style={styles.rowValue}>{value}</Text>
-        <Text style={styles.rowUnit}>{unit}</Text>
-      </View>
-    </Card>
+          <View style={styles.rowValueBlock}>
+            <Text style={styles.rowValue}>{value}</Text>
+            <Text style={styles.rowUnit}>{unit}</Text>
+          </View>
+        </View>
+        {open ? (
+          <View style={styles.chartWrap}>
+            {chart}
+            <Text style={styles.chartNote}>
+              Green: your usual range, from the four weeks before this one. Orange: the side of
+              it you would rather not be on. Tap to collapse.
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.tapHint}>Tap for the chart</Text>
+        )}
+      </Card>
+    </Pressable>
   );
 }
 
@@ -296,6 +344,9 @@ const styles = StyleSheet.create({
   },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  chartWrap: { marginTop: spacing.md },
+  chartNote: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, lineHeight: 16 },
+  tapHint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.xs, textAlign: 'right' },
   rowLabel: { fontSize: fonts.body, fontWeight: '600', color: colors.ink },
   rowMeta: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2 },
   pillWrap: { marginTop: spacing.xs, alignSelf: 'flex-start' },

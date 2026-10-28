@@ -15,6 +15,7 @@ import {
   rangeStatus,
 } from '../lib/labs';
 import { deleteLabs, saveLabs, watchLabs } from '../lib/store';
+import { TimeChart } from '../charts';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Card, Empty, Field, Pill } from '../ui';
 
@@ -247,7 +248,15 @@ export default function LabsScreen() {
               </View>
 
               {history.length > 1 ? (
-                <LabChart marker={marker} points={history} />
+                <View style={styles.chartWrap}>
+                <TimeChart
+                  points={history}
+                  band={marker.range}
+                  outside="both"
+                  format={(v) => formatLab(v, marker)}
+                  dateStyle="month"
+                />
+                </View>
               ) : null}
 
               {expanded ? (
@@ -305,202 +314,6 @@ export default function LabsScreen() {
   );
 }
 
-/**
- * One marker over time, as a lollipop chart.
- *
- * Green band: the lab's reference interval. Orange above or below it: the
- * abnormal side, always kept on screen so the contrast exists even when every
- * result is normal. Dots: results, coloured by which zone they land in. Thin
- * grey line: the least-squares trend through them, once there are three. Drawn with plain
- * views so phone and web render it identically with nothing native to install.
- */
-function LabChart({ marker, points }) {
-  const [width, setWidth] = useState(0);
-  const height = 150;
-  const padTop = 22;
-  const padBottom = 26;
-  const padLeft = 44;
-  const padRight = 18;
-  const plotH = height - padTop - padBottom;
-
-  if (!points.length) return null;
-
-  const values = points.map((p) => p.value);
-  const candidates = [...values];
-  if (marker.range?.low != null) candidates.push(marker.range.low);
-  if (marker.range?.high != null) candidates.push(marker.range.high);
-  let min = Math.min(...candidates);
-  let max = Math.max(...candidates);
-  if (min === max) {
-    min -= 1;
-    max += 1;
-  }
-  // Always leave visible room on the abnormal side of each bound, so the orange
-  // zone exists on screen even when every result is normal.
-  const span = max - min || 1;
-  if (marker.range?.high != null) max = Math.max(max, marker.range.high + span * 0.25);
-  if (marker.range?.low != null) min = Math.min(min, marker.range.low - span * 0.25);
-  const pad = (max - min) * 0.1;
-  min -= pad;
-  max += pad;
-  if (min < 0 && Math.min(...candidates) >= 0) min = 0;
-
-  const yFor = (v) => padTop + plotH - ((v - min) / (max - min)) * plotH;
-  const dayOf = (key) => {
-    const [y, m, d] = key.split('-').map(Number);
-    return new Date(y, m - 1, d).getTime();
-  };
-  const t0 = dayOf(points[0].date);
-  const t1 = dayOf(points[points.length - 1].date);
-  const plotW = Math.max(0, width - padLeft - padRight);
-  const xFor = (key) => padLeft + (t1 === t0 ? plotW / 2 : ((dayOf(key) - t0) / (t1 - t0)) * plotW);
-
-  // Horizontal guides: the range bounds and the top and bottom of the scale.
-  const guides = [];
-  const addGuide = (v, strong) => {
-    if (v == null) return;
-    if (guides.some((g) => Math.abs(g.v - v) < (max - min) * 0.06)) return;
-    guides.push({ v, strong });
-  };
-  addGuide(marker.range?.low, true);
-  addGuide(marker.range?.high, true);
-  addGuide(Math.max(...values), false);
-  addGuide(Math.min(...values), false);
-
-  // Least-squares line through the results, clipped to the plot's vertical extent.
-  let trend = null;
-  if (points.length >= 3 && plotW > 0 && t1 > t0) {
-    const xs = points.map((p) => xFor(p.date));
-    const ys = points.map((p) => yFor(p.value));
-    const n = xs.length;
-    const mx = xs.reduce((a, b) => a + b, 0) / n;
-    const my = ys.reduce((a, b) => a + b, 0) / n;
-    let num = 0;
-    let den = 0;
-    for (let i = 0; i < n; i += 1) {
-      num += (xs[i] - mx) * (ys[i] - my);
-      den += (xs[i] - mx) ** 2;
-    }
-    if (den > 0) {
-      const slope = num / den;
-      const clamp = (y) => Math.min(padTop + plotH, Math.max(padTop, y));
-      const x0 = xs[0];
-      const x1 = xs[n - 1];
-      const y0 = clamp(my + slope * (x0 - mx));
-      const y1 = clamp(my + slope * (x1 - mx));
-      const dx = x1 - x0;
-      const dy = y1 - y0;
-      trend = {
-        length: Math.hypot(dx, dy),
-        angle: Math.atan2(dy, dx),
-        cx: (x0 + x1) / 2,
-        cy: (y0 + y1) / 2,
-      };
-    }
-  }
-
-  const bandTop = marker.range?.high != null ? yFor(marker.range.high) : padTop;
-  const bandBottom = marker.range?.low != null ? yFor(marker.range.low) : padTop + plotH;
-  const baseline = padTop + plotH;
-
-  return (
-    <View
-      style={[styles.chart, { height }]}
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-    >
-      {width > 0 ? (
-        <>
-          {marker.range?.high != null ? (
-            <View
-              style={[
-                styles.outBand,
-                { top: padTop, height: Math.max(0, bandTop - padTop), left: padLeft, width: plotW },
-              ]}
-            />
-          ) : null}
-          {marker.range?.low != null ? (
-            <View
-              style={[
-                styles.outBand,
-                { top: bandBottom, height: Math.max(0, baseline - bandBottom), left: padLeft, width: plotW },
-              ]}
-            />
-          ) : null}
-          {marker.range ? (
-            <View
-              style={[
-                styles.band,
-                { top: bandTop, height: Math.max(2, bandBottom - bandTop), left: padLeft, width: plotW },
-              ]}
-            />
-          ) : null}
-          {marker.range ? (
-            <Text style={[styles.bandLabel, { top: bandTop + 3, right: padRight + 4 }]}>normal</Text>
-          ) : null}
-          {marker.range?.high != null ? (
-            <Text style={[styles.outLabel, { top: padTop + 2, right: padRight + 4 }]}>high</Text>
-          ) : null}
-          {marker.range?.low != null ? (
-            <Text style={[styles.outLabel, { top: baseline - 14, right: padRight + 4 }]}>low</Text>
-          ) : null}
-          {guides.map((g) => (
-            <View key={g.v}>
-              <View
-                style={[
-                  styles.guide,
-                  g.strong && styles.guideStrong,
-                  { top: yFor(g.v), left: padLeft, width: plotW },
-                ]}
-              />
-              <Text style={[styles.yLabel, g.strong && styles.yLabelStrong, { top: yFor(g.v) - 7, width: padLeft - 6 }]}>
-                {formatLab(g.v, marker)}
-              </Text>
-            </View>
-          ))}
-          {trend ? (
-            <View
-              style={[
-                styles.trend,
-                {
-                  width: trend.length,
-                  left: trend.cx - trend.length / 2,
-                  top: trend.cy,
-                  transform: [{ rotate: `${trend.angle}rad` }],
-                },
-              ]}
-            />
-          ) : null}
-          <View style={[styles.axis, { top: baseline, left: padLeft, width: plotW }]} />
-          {points.map((point) => {
-            const x = xFor(point.date);
-            const y = yFor(point.value);
-            const out = outsideRange(point.value, marker.range);
-            const colour = out ? colors.accent : colors.primary;
-            return (
-              <View key={point.date}>
-                <View style={[styles.stem, { left: x, top: y, height: baseline - y, backgroundColor: colour }]} />
-                <View style={[styles.dot, { left: x - 6, top: y - 6, backgroundColor: colour }]} />
-                <Text style={[styles.dotLabel, { left: x - 24, top: y - 20 }]}>
-                  {formatLab(point.value, marker)}
-                </Text>
-                <Text style={[styles.dateLabel, { left: x - 24, top: baseline + 4 }]}>
-                  {shortDate(point.date)}
-                </Text>
-              </View>
-            );
-          })}
-        </>
-      ) : null}
-    </View>
-  );
-}
-
-function shortDate(key) {
-  const [y, m] = key.split('-').map(Number);
-  const month = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short' });
-  return `${month} ${String(y).slice(2)}`;
-}
-
 function longDate(key) {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, {
@@ -531,23 +344,9 @@ const styles = StyleSheet.create({
   pasteResult: { fontSize: fonts.small, color: colors.ink, marginBottom: spacing.md },
 
   rowCard: {},
+  chartWrap: { marginTop: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   history: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: spacing.md, paddingTop: spacing.sm },
-  chart: { width: '100%', maxWidth: 640, marginTop: spacing.md, overflow: 'hidden' },
-  guide: { position: 'absolute', height: 1, backgroundColor: colors.line, opacity: 0.7 },
-  guideStrong: { backgroundColor: colors.primary, opacity: 0.35 },
-  yLabel: { position: 'absolute', left: 0, textAlign: 'right', fontSize: 10, color: colors.inkSoft },
-  yLabelStrong: { color: colors.primary, fontWeight: '700' },
-  band: { position: 'absolute', backgroundColor: colors.primarySoft },
-  outBand: { position: 'absolute', backgroundColor: colors.accentSoft, opacity: 0.8 },
-  outLabel: { position: 'absolute', fontSize: 10, color: colors.accent, fontWeight: '600' },
-  bandLabel: { position: 'absolute', fontSize: 10, color: colors.primary, fontWeight: '600' },
-  axis: { position: 'absolute', height: 1, backgroundColor: colors.line },
-  trend: { position: 'absolute', height: 2, backgroundColor: colors.inkSoft, opacity: 0.45, borderRadius: 1 },
-  stem: { position: 'absolute', width: 2, opacity: 0.5 },
-  dot: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.card },
-  dotLabel: { position: 'absolute', width: 48, textAlign: 'center', fontSize: 10, fontWeight: '700', color: colors.ink },
-  dateLabel: { position: 'absolute', width: 48, textAlign: 'center', fontSize: 9, color: colors.inkSoft },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
   historyDate: { fontSize: fonts.small, color: colors.inkSoft },
   historyValue: { fontSize: fonts.small, fontWeight: '700', color: colors.ink },
