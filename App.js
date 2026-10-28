@@ -13,6 +13,7 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { firebaseReady } from './src/lib/firebase';
+import { HealthDataProvider } from './src/lib/useHealthData';
 import HealthScreen from './src/screens/HealthScreen';
 import LabsScreen from './src/screens/LabsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -85,10 +86,12 @@ function Shell() {
 export default function App() {
   return (
     <AuthProvider>
-      <SafeAreaView style={styles.safe}>
-        <ExpoStatusBar style="dark" />
-        <Shell />
-      </SafeAreaView>
+      <HealthDataProvider>
+        <SafeAreaView style={styles.safe}>
+          <ExpoStatusBar style="dark" />
+          <Shell />
+        </SafeAreaView>
+      </HealthDataProvider>
     </AuthProvider>
   );
 }
