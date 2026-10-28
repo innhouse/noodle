@@ -225,6 +225,10 @@ export function BarChart({ bars, target, format = (v) => String(Math.round(v)), 
   const slot = plotW / bars.length;
   const barW = Math.max(6, slot * 0.6);
   const baseline = PAD_TOP + plotH;
+  // Label only as many bars as fit without overlapping, counting back from the
+  // latest so the most recent week is always named.
+  const labelEvery = Math.max(1, Math.ceil(60 / slot));
+  const labelled = (i) => (bars.length - 1 - i) % labelEvery === 0;
 
   return (
     <View style={[styles.chart, { height }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -244,8 +248,12 @@ export function BarChart({ bars, target, format = (v) => String(Math.round(v)), 
             return (
               <View key={b.label}>
                 <View style={[styles.bar, { left: x, top: y, width: barW, height: Math.max(0, baseline - y), backgroundColor: met ? colors.primary : colors.primarySoft, borderColor: colors.primary }]} />
-                {b.value > 0 ? <Text style={[styles.dotLabel, { left: x + barW / 2 - 24, top: y - 18 }]}>{format(b.value)}</Text> : null}
-                <Text style={[styles.dateLabel, { left: x + barW / 2 - 28, top: baseline + 4 }]}>{b.label}</Text>
+                {b.value > 0 && (slot >= 40 || labelled(i)) ? (
+                  <Text style={[styles.dotLabel, { left: x + barW / 2 - 24, top: y - 18 }]}>{format(b.value)}</Text>
+                ) : null}
+                {labelled(i) ? (
+                  <Text style={[styles.dateLabel, { left: x + barW / 2 - 28, top: baseline + 4 }]}>{b.label}</Text>
+                ) : null}
               </View>
             );
           })}
