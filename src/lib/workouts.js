@@ -362,3 +362,84 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
   }
   return weeks;
 }
+
+/**
+ * Totals per calendar month, newest first: minutes across every session,
+ * kilometres run (runs only) and walked (walks and hikes), and session count.
+ *
+ * Built from the mirrored workouts rather than the Exercise ring, because the
+ * ring series only reaches back 90 days and a year of months needs more.
+ */
+export function monthlyTotals(workouts, targets = {}, count = 12) {
+  const byMonth = new Map();
+  for (const w of workouts ?? []) {
+    const key = w.date.slice(0, 7);
+    const m = byMonth.get(key) ?? { minutes: 0, runMetres: 0, walkMetres: 0, sessions: 0 };
+    m.minutes += w.durationMin ?? 0;
+    m.sessions += 1;
+    if (w.type === 37) m.runMetres += w.metres ?? 0;
+    if (w.type === 52 || w.type === 24) m.walkMetres += w.metres ?? 0;
+    byMonth.set(key, m);
+  }
+  const now = new Date();
+  const months = [];
+  for (let i = 0; i < count; i += 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const m = byMonth.get(key) ?? { minutes: 0, runMetres: 0, walkMetres: 0, sessions: 0 };
+    const minutes = Math.round(m.minutes);
+    const runKm = Math.round(m.runMetres / 100) / 10;
+    months.push({
+      month: key,
+      label: d.toLocaleDateString(undefined, { month: 'short', year: i === 0 || d.getMonth() === 0 ? '2-digit' : undefined }),
+      current: i === 0,
+      minutes,
+      runKm,
+      walkKm: Math.round(m.walkMetres / 100) / 10,
+      sessions: m.sessions,
+      met: {
+        minutes: targets.minutes > 0 ? minutes >= targets.minutes : null,
+        runKm: targets.runKm > 0 ? runKm >= targets.runKm : null,
+      },
+    });
+  }
+  return months;
+}
+
+/** Year-to-date totals and the average of the last twelve complete months. */
+export function monthlySummary(months) {
+  const year = String(new Date().getFullYear());
+  const ytd = months
+    .filter((m) => m.month.startsWith(year))
+    .reduce(
+      (acc, m) => ({
+        minutes: acc.minutes + m.minutes,
+        runKm: acc.runKm + m.runKm,
+        walkKm: acc.walkKm + m.walkKm,
+        sessions: acc.sessions + m.sessions,
+      }),
+      { minutes: 0, runKm: 0, walkKm: 0, sessions: 0 }
+    );
+  const complete = months.filter((m) => !m.current);
+  const n = complete.length || 1;
+  const avg = complete.reduce(
+    (acc, m) => ({
+      minutes: acc.minutes + m.minutes / n,
+      runKm: acc.runKm + m.runKm / n,
+      walkKm: acc.walkKm + m.walkKm / n,
+      sessions: acc.sessions + m.sessions / n,
+    }),
+    { minutes: 0, runKm: 0, walkKm: 0, sessions: 0 }
+  );
+  const round1 = (v) => Math.round(v * 10) / 10;
+  return {
+    ytd: { ...ytd, runKm: round1(ytd.runKm), walkKm: round1(ytd.walkKm) },
+    average: {
+      minutes: Math.round(avg.minutes),
+      runKm: round1(avg.runKm),
+      walkKm: round1(avg.walkKm),
+      sessions: Math.round(avg.sessions),
+      months: complete.length,
+    },
+  };
+}
