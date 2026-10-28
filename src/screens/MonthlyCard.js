@@ -50,9 +50,10 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
           <View style={[styles.row, styles.head]}>
             <Text style={[styles.cell, styles.month, styles.headText]}>Year</Text>
             <Text style={[styles.cell, styles.headText]}>Run km</Text>
+            <Text style={[styles.cell, styles.headText]}>Avg km</Text>
             <Text style={[styles.cell, styles.headText]}>Pace</Text>
-            <Text style={[styles.cell, styles.headText]}>Avg HR</Text>
-            <Text style={[styles.cell, styles.headText]}>Beats/km</Text>
+            <Text style={[styles.cell, styles.headText]}>HR</Text>
+            <Text style={[styles.cell, styles.headText]}>B/km</Text>
             <Text style={[styles.cell, styles.headText]}>Hours</Text>
           </View>
           {withEventDividers(years, events, (y) => `${y.year}-12-31`).map((entry, i) =>
@@ -69,6 +70,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
                 {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
               </Text>
               <Text style={styles.cell}>{entry.row.runKm}</Text>
+              <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
               <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
               <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
               <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
@@ -83,9 +85,10 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
       <View style={[styles.row, styles.head]}>
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
         <Text style={[styles.cell, styles.headText]}>Run km</Text>
+        <Text style={[styles.cell, styles.headText]}>Avg km</Text>
         <Text style={[styles.cell, styles.headText]}>Pace</Text>
-        <Text style={[styles.cell, styles.headText]}>Avg HR</Text>
-        <Text style={[styles.cell, styles.headText]}>Beats/km</Text>
+        <Text style={[styles.cell, styles.headText]}>HR</Text>
+        <Text style={[styles.cell, styles.headText]}>B/km</Text>
         <Text style={[styles.cell, styles.headText]}>All min</Text>
       </View>
       {monthRows.map((entry, i) =>
@@ -109,6 +112,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
               {entry.row.met.runKm != null ? (entry.row.met.runKm ? '✓ ' : '') : ''}
               {entry.row.runKm}
             </Text>
+            <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
             <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
             <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
             <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
@@ -119,8 +123,8 @@ export default function MonthlyCard({ workouts, targets, events: eventText, onMo
           </Pressable>
         )
       )}
-      <SummaryRow label={`${year} to date`} cells={[ytd.runKm, formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—', ytd.minutes]} />
-      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—', average.minutes]} />
+      <SummaryRow label={`${year} to date`} cells={[ytd.runKm, ytd.avgRunKm ?? '—', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—', ytd.minutes]} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, average.avgRunKm ?? '—', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—', average.minutes]} />
 
       {targets?.minutes > 0 || targets?.runKm > 0 ? (
         <Text style={styles.hint}>Ticks mark months that reached the targets in Settings → Training.</Text>
@@ -157,8 +161,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.line },
   head: { marginTop: spacing.xs, borderBottomColor: colors.inkSoft },
   headText: { color: colors.inkSoft, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 },
-  cell: { flex: 1, fontSize: fonts.tiny, color: colors.ink, textAlign: 'right' },
-  month: { flex: 1.5, textAlign: 'left', fontWeight: '600' },
+  cell: { flex: 1, fontSize: 11, color: colors.ink, textAlign: 'right' },
+  month: { flex: 1.4, textAlign: 'left', fontWeight: '600' },
   partial: { color: colors.inkSoft, fontWeight: '400' },
   summary: { backgroundColor: colors.bg, borderBottomWidth: 0, marginTop: 2 },
   divider: { backgroundColor: colors.accentSoft, paddingVertical: 4, paddingHorizontal: spacing.sm, marginTop: 4 },

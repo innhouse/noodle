@@ -382,6 +382,7 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
     if (w.type === 37 && w.metres) {
       m.runMetres += w.metres;
       m.runMinutes += w.durationMin ?? 0;
+      m.runs = (m.runs ?? 0) + 1;
       if (w.avgHr && w.durationMin) {
         // Beats = average rate × minutes; summed over runs with a heart-rate reading.
         m.runBeats += w.avgHr * w.durationMin;
@@ -410,6 +411,8 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
       runMinutes: m.runMinutes,
       runBeats: m.runBeats,
       runHrMinutes: m.runHrMinutes,
+      runs: m.runs ?? 0,
+      avgRunKm: m.runs ? Math.round((m.runMetres / 1000 / m.runs) * 10) / 10 : null,
       // Distance-weighted: total running time over total running distance.
       pace: m.runMetres >= 500 ? m.runMinutes / (m.runMetres / 1000) : null,
       // Time-weighted average heart rate across the month's runs.
@@ -441,11 +444,13 @@ export function monthlySummary(months) {
         runMinutes: acc.runMinutes + m.runMinutes,
         runBeats: acc.runBeats + m.runBeats,
         runHrMinutes: acc.runHrMinutes + m.runHrMinutes,
+        runs: acc.runs + (m.runs ?? 0),
         walkKm: acc.walkKm + m.walkKm,
         sessions: acc.sessions + m.sessions,
       }),
-      { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, walkKm: 0, sessions: 0 }
+      { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0 }
     );
+  const avgKmOf = (t) => (t.runs ? Math.round((t.runKm / t.runs) * 10) / 10 : null);
   const paceOf = (t) => (t.runKm >= 0.5 ? t.runMinutes / t.runKm : null);
   const hrOf = (t) => (t.runHrMinutes > 0 ? Math.round(t.runBeats / t.runHrMinutes) : null);
   const bpkOf = (t) =>
@@ -466,6 +471,7 @@ export function monthlySummary(months) {
       pace: paceOf(ytd),
       avgHr: hrOf(ytd),
       beatsPerKm: bpkOf(ytd),
+      avgRunKm: avgKmOf(ytd),
     },
     average: {
       minutes: Math.round(total.minutes / n),
@@ -475,6 +481,7 @@ export function monthlySummary(months) {
       pace: paceOf(total),
       avgHr: hrOf(total),
       beatsPerKm: bpkOf(total),
+      avgRunKm: avgKmOf(total),
       months: complete.length,
     },
   };
@@ -495,12 +502,13 @@ export function yearlyTotals(workouts) {
   const byYear = new Map();
   for (const m of months) {
     const year = m.month.slice(0, 4);
-    const y = byYear.get(year) ?? { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, walkKm: 0, sessions: 0, current: false };
+    const y = byYear.get(year) ?? { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0, current: false };
     y.minutes += m.minutes;
     y.runKm += m.runKm;
     y.runMinutes += m.runMinutes;
     y.runBeats += m.runBeats;
     y.runHrMinutes += m.runHrMinutes;
+    y.runs += m.runs ?? 0;
     y.walkKm += m.walkKm;
     y.sessions += m.sessions;
     y.current = y.current || m.current;
@@ -514,6 +522,7 @@ export function yearlyTotals(workouts) {
       current: y.current,
       minutes: y.minutes,
       runKm: round1(y.runKm),
+      avgRunKm: y.runs ? round1(y.runKm / y.runs) : null,
       walkKm: round1(y.walkKm),
       sessions: y.sessions,
       pace: y.runKm >= 0.5 ? y.runMinutes / y.runKm : null,
