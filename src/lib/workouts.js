@@ -388,6 +388,10 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
       { minutes: 0, runMetres: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, walkMetres: 0, sessions: 0 };
     m.minutes += w.durationMin ?? 0;
     m.sessions += 1;
+    if (w.type !== 37) {
+      m.otherMinutes = (m.otherMinutes ?? 0) + (w.durationMin ?? 0);
+      m.otherSessions = (m.otherSessions ?? 0) + 1;
+    }
     const bucket = kpiBucket(w);
     m.mix = m.mix ?? { runs: 0, strength: 0, other: 0, walks: 0 };
     m.mix[bucket] += 1;
@@ -430,6 +434,10 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
       longest: m.longest ?? null,
       longestKm: m.longest ? Math.round(m.longest.metres / 100) / 10 : null,
       avgMin: m.sessions ? Math.round(m.minutes / m.sessions) : null,
+      // Everything but runs, which have their own tables.
+      otherMinutes: Math.round(m.otherMinutes ?? 0),
+      otherSessions: m.otherSessions ?? 0,
+      avgOtherMin: m.otherSessions ? Math.round((m.otherMinutes ?? 0) / m.otherSessions) : null,
       // Distance-weighted: total running time over total running distance.
       pace: m.runMetres >= 500 ? m.runMinutes / (m.runMetres / 1000) : null,
       // Time-weighted average heart rate across the month's runs.
@@ -464,9 +472,12 @@ export function monthlySummary(months) {
         runs: acc.runs + (m.runs ?? 0),
         walkKm: acc.walkKm + m.walkKm,
         sessions: acc.sessions + m.sessions,
+        otherMinutes: acc.otherMinutes + (m.otherMinutes ?? 0),
+        otherSessions: acc.otherSessions + (m.otherSessions ?? 0),
       }),
-      { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0 }
+      { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0, otherMinutes: 0, otherSessions: 0 }
     );
+  const avgOtherOf = (t) => (t.otherSessions ? Math.round(t.otherMinutes / t.otherSessions) : null);
   const avgKmOf = (t) => (t.runs ? Math.round((t.runKm / t.runs) * 10) / 10 : null);
   const paceOf = (t) => (t.runKm >= 0.5 ? t.runMinutes / t.runKm : null);
   const hrOf = (t) => (t.runHrMinutes > 0 ? Math.round(t.runBeats / t.runHrMinutes) : null);
@@ -489,12 +500,16 @@ export function monthlySummary(months) {
       avgHr: hrOf(ytd),
       beatsPerKm: bpkOf(ytd),
       avgRunKm: avgKmOf(ytd),
+      avgOtherMin: avgOtherOf(ytd),
     },
     average: {
       minutes: Math.round(total.minutes / n),
       runKm: round1(total.runKm / n),
       walkKm: round1(total.walkKm / n),
       sessions: Math.round(total.sessions / n),
+      otherMinutes: Math.round(total.otherMinutes / n),
+      otherSessions: Math.round(total.otherSessions / n),
+      avgOtherMin: avgOtherOf(total),
       pace: paceOf(total),
       avgHr: hrOf(total),
       beatsPerKm: bpkOf(total),
@@ -535,6 +550,8 @@ export function yearlyTotals(workouts) {
     y.mix.walks += m.mix?.walks ?? 0;
     y.walkKm += m.walkKm;
     y.sessions += m.sessions;
+    y.otherMinutes = (y.otherMinutes ?? 0) + (m.otherMinutes ?? 0);
+    y.otherSessions = (y.otherSessions ?? 0) + (m.otherSessions ?? 0);
     y.current = y.current || m.current;
     byYear.set(year, y);
   }
@@ -553,6 +570,9 @@ export function yearlyTotals(workouts) {
       longest: y.longest ?? null,
       longestKm: y.longest ? Math.round(y.longest.metres / 100) / 10 : null,
       avgMin: y.sessions ? Math.round(y.minutes / y.sessions) : null,
+      otherMinutes: y.otherMinutes ?? 0,
+      otherSessions: y.otherSessions ?? 0,
+      avgOtherMin: y.otherSessions ? Math.round((y.otherMinutes ?? 0) / y.otherSessions) : null,
       pace: y.runKm >= 0.5 ? y.runMinutes / y.runKm : null,
       avgHr: y.runHrMinutes > 0 ? Math.round(y.runBeats / y.runHrMinutes) : null,
       beatsPerKm:
