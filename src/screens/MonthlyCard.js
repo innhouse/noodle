@@ -15,13 +15,14 @@ export default function MonthlyCard({ workouts, targets }) {
   if (!months.some((m) => m.sessions > 0)) return null;
   const bars = [...months].reverse();
   const { ytd, average } = monthlySummary(months);
+  const year = new Date().getFullYear();
 
   return (
     <Card>
       <Text style={styles.title}>Monthly totals</Text>
       <Text style={styles.body}>
-        Kilometres run per month, last twelve months. Pace is min/km across the month’s runs,
-        weighted by distance.
+        Kilometres run per month, last twelve months. Pace, heart rate and beats per km are
+        across the month’s runs, weighted by distance and time.
       </Text>
       <BarChart
         bars={bars.map((m) => ({ label: m.label, value: m.runKm }))}
@@ -30,13 +31,38 @@ export default function MonthlyCard({ workouts, targets }) {
         height={120}
       />
 
+      <Text style={styles.section}>Running</Text>
       <View style={[styles.row, styles.head]}>
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
-        <Text style={[styles.cell, styles.headText]}>Min</Text>
-        <Text style={[styles.cell, styles.headText]}>Run km</Text>
+        <Text style={[styles.cell, styles.headText]}>Km</Text>
         <Text style={[styles.cell, styles.headText]}>Pace</Text>
+        <Text style={[styles.cell, styles.headText]}>Avg HR</Text>
+        <Text style={[styles.cell, styles.headText]}>Beats/km</Text>
+      </View>
+      {months.map((m) => (
+        <View key={m.month} style={styles.row}>
+          <Text style={[styles.cell, styles.month]}>
+            {m.label}
+            {m.current ? <Text style={styles.partial}> so far</Text> : null}
+          </Text>
+          <Text style={[styles.cell, tone(m.met.runKm)]}>
+            {m.met.runKm != null ? (m.met.runKm ? '✓ ' : '') : ''}
+            {m.runKm}
+          </Text>
+          <Text style={styles.cell}>{formatPaceMin(m.pace)}</Text>
+          <Text style={styles.cell}>{m.avgHr ?? '—'}</Text>
+          <Text style={styles.cell}>{m.beatsPerKm ?? '—'}</Text>
+        </View>
+      ))}
+      <SummaryRow label={`${year} to date`} cells={[ytd.runKm, formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
+
+      <Text style={styles.section}>All activity</Text>
+      <View style={[styles.row, styles.head]}>
+        <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
+        <Text style={[styles.cell, styles.headText]}>Minutes</Text>
         <Text style={[styles.cell, styles.headText]}>Walk km</Text>
-        <Text style={[styles.cell, styles.headText]}>Sess.</Text>
+        <Text style={[styles.cell, styles.headText]}>Sessions</Text>
       </View>
       {months.map((m) => (
         <View key={m.month} style={styles.row}>
@@ -48,38 +74,33 @@ export default function MonthlyCard({ workouts, targets }) {
             {m.met.minutes != null ? (m.met.minutes ? '✓ ' : '') : ''}
             {formatDuration(m.minutes)}
           </Text>
-          <Text style={[styles.cell, tone(m.met.runKm)]}>
-            {m.met.runKm != null ? (m.met.runKm ? '✓ ' : '') : ''}
-            {m.runKm}
-          </Text>
-          <Text style={styles.cell}>{formatPaceMin(m.pace)}</Text>
           <Text style={styles.cell}>{m.walkKm}</Text>
           <Text style={styles.cell}>{m.sessions}</Text>
         </View>
       ))}
-      <View style={[styles.row, styles.summary]}>
-        <Text style={[styles.cell, styles.month]}>{new Date().getFullYear()} to date</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{formatDuration(ytd.minutes)}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{ytd.runKm}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{formatPaceMin(ytd.pace)}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{ytd.walkKm}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{ytd.sessions}</Text>
-      </View>
-      <View style={[styles.row, styles.summary]}>
-        <Text style={[styles.cell, styles.month]}>
-          Monthly avg
-          <Text style={styles.partial}> ({average.months} mo)</Text>
-        </Text>
-        <Text style={[styles.cell, styles.summaryText]}>{formatDuration(average.minutes)}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{average.runKm}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{formatPaceMin(average.pace)}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{average.walkKm}</Text>
-        <Text style={[styles.cell, styles.summaryText]}>{average.sessions}</Text>
-      </View>
+      <SummaryRow label={`${year} to date`} cells={[formatDuration(ytd.minutes), ytd.walkKm, ytd.sessions]} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[formatDuration(average.minutes), average.walkKm, average.sessions]} />
+
       {targets?.minutes > 0 || targets?.runKm > 0 ? (
         <Text style={styles.hint}>Ticks mark months that reached the targets in Settings → Training.</Text>
       ) : null}
     </Card>
+  );
+}
+
+function SummaryRow({ label, note, cells }) {
+  return (
+    <View style={[styles.row, styles.summary]}>
+      <Text style={[styles.cell, styles.month]}>
+        {label}
+        {note ? <Text style={styles.partial}> {note}</Text> : null}
+      </Text>
+      {cells.map((value, i) => (
+        <Text key={i} style={[styles.cell, styles.summaryText]}>
+          {value}
+        </Text>
+      ))}
+    </View>
   );
 }
 
@@ -91,8 +112,9 @@ function tone(met) {
 const styles = StyleSheet.create({
   title: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
   body: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.xs, marginBottom: spacing.sm },
+  section: { fontSize: fonts.small, fontWeight: '700', color: colors.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: spacing.lg },
   row: { flexDirection: 'row', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.line },
-  head: { marginTop: spacing.md, borderBottomColor: colors.inkSoft },
+  head: { marginTop: spacing.xs, borderBottomColor: colors.inkSoft },
   headText: { color: colors.inkSoft, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 },
   cell: { flex: 1, fontSize: fonts.tiny, color: colors.ink, textAlign: 'right' },
   month: { flex: 1.5, textAlign: 'left', fontWeight: '600' },
