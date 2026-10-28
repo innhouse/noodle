@@ -611,3 +611,52 @@ export function byActivity(workouts, days = 365) {
     }))
     .sort((a, b) => b.minutes - a.minutes);
 }
+
+/**
+ * Runs of consecutive days that each had a qualifying run — by default one of
+ * at least 10 km. Returns the longest streaks with their dates, and whether
+ * one is still alive (today or yesterday counts as alive; a day skipped ends
+ * it). Several runs on one day count once; a day's qualifying distance is the
+ * longest single run that day, not the sum.
+ */
+export function runStreaks(workouts, minKm = 10, top = 5) {
+  const best = new Map();
+  for (const w of workouts ?? []) {
+    if (w.type !== 37 || !w.metres) continue;
+    best.set(w.date, Math.max(best.get(w.date) ?? 0, w.metres / 1000));
+  }
+  const days = [...best.entries()]
+    .filter(([, km]) => km >= minKm)
+    .map(([date]) => date)
+    .sort();
+
+  const dayNum = (key) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
+  };
+
+  const streaks = [];
+  let start = null;
+  let prev = null;
+  for (const date of days) {
+    if (prev != null && dayNum(date) === dayNum(prev) + 1) {
+      prev = date;
+      continue;
+    }
+    if (start) streaks.push({ start, end: prev, days: dayNum(prev) - dayNum(start) + 1 });
+    start = date;
+    prev = date;
+  }
+  if (start) streaks.push({ start, end: prev, days: dayNum(prev) - dayNum(start) + 1 });
+
+  const today = dayNum(new Date().toISOString().slice(0, 10));
+  const last = streaks[streaks.length - 1];
+  const current = last && today - dayNum(last.end) <= 1 ? last : null;
+
+  return {
+    minKm,
+    current,
+    longest: [...streaks].sort((a, b) => b.days - a.days || b.end.localeCompare(a.end)).slice(0, top),
+    qualifyingDays: days.length,
+  };
+}

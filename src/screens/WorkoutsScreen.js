@@ -26,6 +26,7 @@ import { Card, Empty, Pill, Segmented } from '../ui';
 import KpiCard from './KpiCard';
 import MonthlyCard from './MonthlyCard';
 import MonthSheet from './MonthSheet';
+import StreakCard from './StreakCard';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -103,6 +104,7 @@ export default function WorkoutsScreen() {
       ) : null}
 
       {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
+      {workouts.length ? <StreakCard workouts={workouts} minKm={profile?.streakKm ?? 10} /> : null}
 
       {workouts.length ? (
         <Card>
