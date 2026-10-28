@@ -4,9 +4,9 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useAuth } from '../context/AuthContext';
 import { formatDayLabel, formatTime } from '../lib/dates';
 import { saveWorkoutNote } from '../lib/store';
-import { describeType, FOOT_TYPES, formatDuration, SYMPTOMS } from '../lib/workouts';
+import { describeType, formatDuration, SYMPTOMS, WORKOUT_TYPES } from '../lib/workouts';
 import { colors, fonts, radius, spacing } from '../theme';
-import { Button, Segmented } from '../ui';
+import { Button, Dropdown } from '../ui';
 
 /**
  * How a session felt, in one tap each.
@@ -32,7 +32,9 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
   if (!workout) return null;
   const recordedType = workout.originalType ?? workout.type;
   const type = describeType(typeOverride ?? recordedType);
-  const onFoot = FOOT_TYPES.some((t) => t.value === recordedType);
+  const typeOptions = Object.entries(WORKOUT_TYPES)
+    .map(([value, info]) => ({ value: Number(value), label: `${info.icon} ${info.label}` }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   function toggle(key) {
     setSymptoms((current) => {
@@ -66,20 +68,13 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
           {workout.avgHr ? ` · ${workout.avgHr} bpm avg` : ''}
         </Text>
 
-        {onFoot ? (
-          <>
-            <Text style={styles.label}>Recorded as</Text>
-            <Segmented
-              options={FOOT_TYPES}
-              value={typeOverride ?? recordedType}
-              onChange={(value) => setTypeOverride(value)}
-              style={styles.segmented}
-            />
-            <Text style={styles.hint}>
-              Health keeps whatever the watch recorded; Noodle uses what you choose here.
-            </Text>
-          </>
-        ) : null}
+        <Dropdown
+          label="Recorded as"
+          value={typeOverride ?? recordedType}
+          options={typeOptions}
+          onChange={(value) => setTypeOverride(value)}
+          hint="Health keeps whatever the watch recorded; Noodle uses what you choose here."
+        />
 
         <Text style={styles.label}>How did it feel?</Text>
         <View style={styles.chips}>
@@ -124,8 +119,6 @@ const styles = StyleSheet.create({
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.lg, lineHeight: 20 },
   label: { fontSize: fonts.small, fontWeight: '700', color: colors.inkSoft, marginBottom: spacing.sm },
-  segmented: { marginBottom: spacing.xs },
-  hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginBottom: spacing.lg, lineHeight: 17 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
   chip: {
     paddingVertical: spacing.sm,
