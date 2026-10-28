@@ -63,7 +63,6 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
             <Text style={[styles.cell, styles.month, styles.headText]}>Year</Text>
             <Text style={[styles.cell, styles.headText]}>Run km</Text>
             <Text style={[styles.cell, styles.headText]}>Avg km</Text>
-            <Text style={[styles.cell, styles.headText]}>Long</Text>
             <Text style={[styles.cell, styles.headText]}>Pace</Text>
             <Text style={[styles.cell, styles.headText]}>HR</Text>
             <Text style={[styles.cell, styles.headText]}>B/km</Text>
@@ -82,10 +81,8 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
                 {entry.row.year}
                 {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
               </Text>
-              <Text style={styles.cell}>{entry.row.runKm}</Text>
+              <Text style={styles.cell}>{Math.round(entry.row.runKm)}</Text>
               <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
-            <Text style={styles.cell}>{entry.row.longestKm ?? '—'}</Text>
-              <Text style={styles.cell}>{entry.row.longestKm ?? '—'}</Text>
               <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
               <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
               <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
@@ -101,7 +98,6 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
         <Text style={[styles.cell, styles.headText]}>Run km</Text>
         <Text style={[styles.cell, styles.headText]}>Avg km</Text>
-        <Text style={[styles.cell, styles.headText]}>Long</Text>
         <Text style={[styles.cell, styles.headText]}>Pace</Text>
         <Text style={[styles.cell, styles.headText]}>HR</Text>
         <Text style={[styles.cell, styles.headText]}>B/km</Text>
@@ -125,18 +121,17 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
             </Text>
             <Text style={[styles.cell, tone(entry.row.met.runKm)]}>
               {entry.row.met.runKm != null ? (entry.row.met.runKm ? '✓ ' : '') : ''}
-              {entry.row.runKm}
+              {Math.round(entry.row.runKm)}
             </Text>
             <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
-            <Text style={styles.cell}>{entry.row.longestKm ?? '—'}</Text>
             <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
             <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
             <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
           </Pressable>
         )
       )}
-      <SummaryRow label={`${year} to date`} cells={[ytd.runKm, ytd.avgRunKm ?? '—', '', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
-      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.runKm, average.avgRunKm ?? '—', '', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
+      <SummaryRow label={`${year} to date`} cells={[Math.round(ytd.runKm), ytd.avgRunKm ?? '—', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[Math.round(average.runKm), average.avgRunKm ?? '—', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
 
       {years.length > 1 ? (
         <>
