@@ -83,6 +83,7 @@ export default function SettingsScreen() {
         minutes: Number(draft.monthlyMinutes) || 0,
         runKm: Number(draft.monthlyRunKm) || 0,
       },
+      events: draft.events ?? '',
     });
     setSaved(true);
   }
@@ -243,6 +244,23 @@ export default function SettingsScreen() {
           keyboardType="number-pad"
           placeholder="630"
           hint="Your Fitness Exercise-ring goal times seven (90 min/day = 630). Noodle can read the ring's minutes from Health but not its goal, so this one number is kept by hand."
+        />
+      </Card>
+
+      <Card>
+        <Text style={styles.cardTitle}>Events</Text>
+        <Text style={styles.cardBody}>
+          Dates that divide your history — a cardiac event, a medication change. One per line,
+          as a date then a label. Tables and charts show them as dividers, because numbers on
+          either side of one are not the same measurement.
+        </Text>
+        <Field
+          label="Events"
+          value={draft.events ?? ''}
+          onChangeText={(text) => set({ events: text })}
+          multiline
+          placeholder={'2026-08-27 STEMI\n2018-03-01 Heart attack'}
+          autoCapitalize="none"
         />
       </Card>
 

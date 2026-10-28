@@ -488,3 +488,79 @@ export function formatPaceMin(perKm) {
   if (seconds === 60) return `${whole + 1}:00`;
   return `${whole}:${String(seconds).padStart(2, '0')}`;
 }
+
+/** Totals per calendar year, newest first, same columns as the months. */
+export function yearlyTotals(workouts) {
+  const months = monthlyTotals(workouts, {}, 12 * 6);
+  const byYear = new Map();
+  for (const m of months) {
+    const year = m.month.slice(0, 4);
+    const y = byYear.get(year) ?? { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, walkKm: 0, sessions: 0, current: false };
+    y.minutes += m.minutes;
+    y.runKm += m.runKm;
+    y.runMinutes += m.runMinutes;
+    y.runBeats += m.runBeats;
+    y.runHrMinutes += m.runHrMinutes;
+    y.walkKm += m.walkKm;
+    y.sessions += m.sessions;
+    y.current = y.current || m.current;
+    byYear.set(year, y);
+  }
+  const round1 = (v) => Math.round(v * 10) / 10;
+  return [...byYear.entries()]
+    .filter(([, y]) => y.sessions > 0)
+    .map(([year, y]) => ({
+      year,
+      current: y.current,
+      minutes: y.minutes,
+      runKm: round1(y.runKm),
+      walkKm: round1(y.walkKm),
+      sessions: y.sessions,
+      pace: y.runKm >= 0.5 ? y.runMinutes / y.runKm : null,
+      avgHr: y.runHrMinutes > 0 ? Math.round(y.runBeats / y.runHrMinutes) : null,
+      beatsPerKm:
+        y.runHrMinutes > 0 && y.runKm >= 0.5
+          ? Math.round(y.runBeats / (y.runKm * (y.runHrMinutes / y.runMinutes)))
+          : null,
+    }))
+    .sort((a, b) => b.year.localeCompare(a.year));
+}
+
+/**
+ * Dated markers the person keeps — a cardiac event, a medication change — as
+ * "YYYY-MM-DD label" lines in Settings. Used to divide tables and mark charts,
+ * because a comparison across one of these is not a comparison of fitness.
+ */
+export function parseEvents(text) {
+  return String(text ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/);
+      return match ? { date: match[1], label: match[2] || 'Event' } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Rows interleaved with event dividers, for a table sorted newest first. A
+ * divider goes above the first row dated on or after the event — read top to
+ * bottom, "since <event>" sits above the rows it applies to.
+ */
+export function withEventDividers(rows, events, dateOf) {
+  if (!events?.length || !rows?.length) return rows.map((row) => ({ row }));
+  const out = [];
+  const pending = [...events].sort((a, b) => b.date.localeCompare(a.date));
+  for (const row of rows) {
+    const d = dateOf(row);
+    while (pending.length && pending[0].date > d) {
+      // Event newer than this row: it belongs above the previous (newer) rows,
+      // which have already been emitted; emit it here as a boundary.
+      out.push({ divider: pending.shift() });
+    }
+    out.push({ row });
+  }
+  return out;
+}
