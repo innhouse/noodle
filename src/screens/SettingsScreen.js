@@ -37,8 +37,10 @@ export default function SettingsScreen() {
       kpiRuns: profile?.kpis?.runs ?? 3,
       kpiStrength: profile?.kpis?.strength ?? 2,
       kpiOther: profile?.kpis?.other ?? 1,
+      kpiWalks: profile?.kpis?.walks ?? 0,
       kpiZoneMin: profile?.kpis?.zoneMin ?? 0,
       kpiYogaMin: profile?.kpis?.yogaMin ?? 70,
+      streakKm: profile?.streakKm ?? 10,
       monthlyMinutes: profile?.monthly?.minutes ?? 0,
       monthlyRunKm: profile?.monthly?.runKm ?? 0,
       weightLb: displayLb(profile?.weightKg),
@@ -76,6 +78,7 @@ export default function SettingsScreen() {
         runs: Number(draft.kpiRuns) || 0,
         strength: Number(draft.kpiStrength) || 0,
         other: Number(draft.kpiOther) || 0,
+        walks: Number(draft.kpiWalks) || 0,
         zoneMin: Number(draft.kpiZoneMin) || 0,
         yogaMin: Number(draft.kpiYogaMin) || 0,
       },
@@ -86,6 +89,7 @@ export default function SettingsScreen() {
         runKm: Number(draft.monthlyRunKm) || 0,
       },
       events: draft.events ?? '',
+      streakKm: Number(String(draft.streakKm).replace(',', '.')) || 10,
     });
     setSaved(true);
   }
@@ -151,7 +155,8 @@ export default function SettingsScreen() {
         <Text style={styles.cardTitle}>Training</Text>
         <Text style={styles.cardBody}>
           Sessions per week you are aiming for. Runs are runs; strength is any lifting or
-          core session (Jefit included); other is everything else — walks, yoga, volleyball.
+          core session (Jefit included); walks are walks; other is everything else — yoga,
+          volleyball, pickleball, hikes. Set walks to 0 to leave them off the plan.
         </Text>
         <View style={styles.kpiRow}>
           <View style={{ flex: 1 }}>
@@ -179,6 +184,15 @@ export default function SettingsScreen() {
               onChangeText={(text) => set({ kpiOther: text })}
               keyboardType="number-pad"
               placeholder="1"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Walks"
+              value={String(draft.kpiWalks ?? '')}
+              onChangeText={(text) => set({ kpiWalks: text })}
+              keyboardType="number-pad"
+              placeholder="0"
             />
           </View>
         </View>
@@ -224,6 +238,14 @@ export default function SettingsScreen() {
             />
           </View>
         </View>
+        <Field
+          label="Streak: a run counts from (km)"
+          value={String(draft.streakKm ?? '')}
+          onChangeText={(text) => set({ streakKm: text })}
+          keyboardType="decimal-pad"
+          placeholder="10"
+          hint="Consecutive days with at least one run of this distance. The Workouts tab shows your current and longest streaks."
+        />
         <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
           Monthly targets, if you want them. Leave at 0 for totals only.
         </Text>

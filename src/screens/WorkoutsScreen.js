@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
@@ -22,10 +22,11 @@ import {
 } from '../lib/workouts';
 import { BarChart, TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
-import { Card, Empty, Pill, Segmented } from '../ui';
+import { Button, Card, Empty, Pill, Segmented } from '../ui';
 import KpiCard from './KpiCard';
 import MonthlyCard from './MonthlyCard';
 import MonthSheet from './MonthSheet';
+import StreakCard from './StreakCard';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -34,14 +35,30 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  * Weekly totals sit above each group because the question after a layoff is
  * rarely "how was that run" and usually "am I doing more than last week".
  */
+const WEEKS_PAGE = 8;
+
 export default function WorkoutsScreen() {
   const { user, profile } = useAuth();
   const { series, workouts: recorded, loading, refreshing, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
-  const workouts = applyNotes(recorded, notes);
+  const workouts = useMemo(() => applyNotes(recorded, notes), [recorded, notes]);
   const [noting, setNoting] = useState(null);
   const [month, setMonth] = useState(null);
   const [footType, setFootType] = useState(null);
+  // The session list is drawn a few weeks at a time. Years of history as one
+  // list of cards was enough to run the phone out of memory.
+  const [weeksShown, setWeeksShown] = useState(WEEKS_PAGE);
+
+  const weeks = useMemo(() => groupByWeek(workouts), [workouts]);
+  const derived = useMemo(() => {
+    const hasRuns = workouts.some((w) => ON_FOOT.runs.includes(w.type) && beatsPerKm(w));
+    const hasWalks = workouts.some((w) => ON_FOOT.walks.includes(w.type) && beatsPerKm(w));
+    return { hasRuns, hasWalks, efficiencyAny: efficiencyTrend(workouts, 10, 'all') };
+  }, [workouts]);
+  // Default to the split view when both exist; a walk costs fewer beats per km
+  // than a run, so a combined line would track the mix rather than fitness.
+  const which = footType ?? (derived.hasRuns && derived.hasWalks ? 'runs' : 'all');
+  const efficiency = useMemo(() => efficiencyTrend(workouts, 10, which), [workouts, which]);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -57,17 +74,10 @@ export default function WorkoutsScreen() {
     );
   }
 
-  const weeks = groupByWeek(workouts);
   const target = profile?.weeklyMinutesTarget ?? 630;
   const ring = series?.exerciseMinutes;
   const thisWeek = exerciseMinutesThisWeek(ring, workouts);
-  const hasRuns = workouts.some((w) => ON_FOOT.runs.includes(w.type) && beatsPerKm(w));
-  const hasWalks = workouts.some((w) => ON_FOOT.walks.includes(w.type) && beatsPerKm(w));
-  // Default to the split view when both exist; a walk costs fewer beats per km
-  // than a run, so a combined line would track the mix rather than fitness.
-  const which = footType ?? (hasRuns && hasWalks ? 'runs' : 'all');
-  const efficiency = efficiencyTrend(workouts, 10, which);
-  const efficiencyAny = efficiencyTrend(workouts, 10, 'all');
+  const { hasRuns, hasWalks, efficiencyAny } = derived;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -105,6 +115,9 @@ export default function WorkoutsScreen() {
       ) : null}
 
       {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
+      {workouts.length ? (
+        <StreakCard workouts={workouts} minKm={profile?.streakKm ?? 10} onPick={setNoting} />
+      ) : null}
 
       {workouts.length ? (
         <Card>
@@ -190,7 +203,7 @@ export default function WorkoutsScreen() {
           onMonthPress={setMonth}
         /> : null}
 
-      {weeks.map((week) => (
+      {weeks.slice(0, weeksShown).map((week) => (
         <View key={week.week}>
           <View style={styles.weekHeader}>
             <Text style={styles.weekLabel}>{weekLabel(week.week)}</Text>
@@ -210,6 +223,14 @@ export default function WorkoutsScreen() {
           ))}
         </View>
       ))}
+
+      {weeks.length > weeksShown ? (
+        <Button
+          title={`Show ${WEEKS_PAGE} more weeks`}
+          variant="secondary"
+          onPress={() => setWeeksShown((n) => n + WEEKS_PAGE)}
+        />
+      ) : null}
 
       {workouts.length ? (
         <Text style={styles.disclaimer}>

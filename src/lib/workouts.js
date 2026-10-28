@@ -309,11 +309,16 @@ export function exerciseMinutesThisWeek(series, workouts) {
   return weeks[0]?.value ?? 0;
 }
 
-export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, zoneMin: 0, yogaMin: 70 };
+export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, walks: 0, zoneMin: 0, yogaMin: 70 };
 
-/** Which of the three weekly buckets a session falls in. */
+/**
+ * Which weekly bucket a session falls in. Walks get their own, so a daily walk
+ * doesn't quietly satisfy the "other activity" target meant for sport and
+ * classes.
+ */
 export function kpiBucket(workout) {
   if (workout.type === 37) return 'runs';
+  if (workout.type === 52) return 'walks';
   if (describeType(workout.type).kind === 'strength') return 'strength';
   return 'other';
 }
@@ -330,7 +335,7 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
   const byWeek = new Map();
   for (const w of workouts ?? []) {
     const key = weekKey(w.date);
-    const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0, yogaMin: 0 };
+    const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, yogaMin: 0 };
     week[kpiBucket(w)] += 1;
     week.zoneMin += w.zoneMin ?? 0;
     if (describeType(w.type).kind === 'mobility') week.yogaMin += w.durationMin ?? 0;
@@ -345,12 +350,13 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
     const d = new Date(monday);
     d.setDate(monday.getDate() - 7 * i);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const counts = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, zoneMin: 0, yogaMin: 0 };
+    const counts = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, yogaMin: 0 };
     counts.yogaMin = Math.round(counts.yogaMin);
     const met = {
       runs: counts.runs >= goals.runs,
       strength: counts.strength >= goals.strength,
       other: counts.other >= goals.other,
+      walks: counts.walks >= goals.walks,
       zoneMin: counts.zoneMin >= goals.zoneMin,
       yogaMin: counts.yogaMin >= goals.yogaMin,
     };
@@ -360,7 +366,7 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
       counts,
       goals,
       met,
-      all: ['runs', 'strength', 'other', 'zoneMin', 'yogaMin'].every((k) => goals[k] <= 0 || met[k]),
+      all: ['runs', 'strength', 'other', 'walks', 'zoneMin', 'yogaMin'].every((k) => goals[k] <= 0 || met[k]),
     });
   }
   return weeks;
@@ -383,12 +389,13 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
     m.minutes += w.durationMin ?? 0;
     m.sessions += 1;
     const bucket = kpiBucket(w);
-    m.mix = m.mix ?? { runs: 0, strength: 0, other: 0 };
+    m.mix = m.mix ?? { runs: 0, strength: 0, other: 0, walks: 0 };
     m.mix[bucket] += 1;
     if (w.type === 37 && w.metres) {
       m.runMetres += w.metres;
       m.runMinutes += w.durationMin ?? 0;
       m.runs = (m.runs ?? 0) + 1;
+      if (!m.longest || w.metres > m.longest.metres) m.longest = w;
       if (w.avgHr && w.durationMin) {
         // Beats = average rate × minutes; summed over runs with a heart-rate reading.
         m.runBeats += w.avgHr * w.durationMin;
@@ -419,7 +426,9 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
       runHrMinutes: m.runHrMinutes,
       runs: m.runs ?? 0,
       avgRunKm: m.runs ? Math.round((m.runMetres / 1000 / m.runs) * 10) / 10 : null,
-      mix: m.mix ?? { runs: 0, strength: 0, other: 0 },
+      mix: m.mix ?? { runs: 0, strength: 0, other: 0, walks: 0 },
+      longest: m.longest ?? null,
+      longestKm: m.longest ? Math.round(m.longest.metres / 100) / 10 : null,
       avgMin: m.sessions ? Math.round(m.minutes / m.sessions) : null,
       // Distance-weighted: total running time over total running distance.
       pace: m.runMetres >= 500 ? m.runMinutes / (m.runMetres / 1000) : null,
@@ -512,16 +521,18 @@ export function yearlyTotals(workouts) {
     const year = m.month.slice(0, 4);
     const y =
       byYear.get(year) ??
-      { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0, mix: { runs: 0, strength: 0, other: 0 }, current: false };
+      { minutes: 0, runKm: 0, runMinutes: 0, runBeats: 0, runHrMinutes: 0, runs: 0, walkKm: 0, sessions: 0, mix: { runs: 0, strength: 0, other: 0, walks: 0 }, current: false };
     y.minutes += m.minutes;
     y.runKm += m.runKm;
     y.runMinutes += m.runMinutes;
     y.runBeats += m.runBeats;
     y.runHrMinutes += m.runHrMinutes;
     y.runs += m.runs ?? 0;
+    if (m.longest && (!y.longest || m.longest.metres > y.longest.metres)) y.longest = m.longest;
     y.mix.runs += m.mix?.runs ?? 0;
     y.mix.strength += m.mix?.strength ?? 0;
     y.mix.other += m.mix?.other ?? 0;
+    y.mix.walks += m.mix?.walks ?? 0;
     y.walkKm += m.walkKm;
     y.sessions += m.sessions;
     y.current = y.current || m.current;
@@ -539,6 +550,8 @@ export function yearlyTotals(workouts) {
       walkKm: round1(y.walkKm),
       sessions: y.sessions,
       mix: y.mix,
+      longest: y.longest ?? null,
+      longestKm: y.longest ? Math.round(y.longest.metres / 100) / 10 : null,
       avgMin: y.sessions ? Math.round(y.minutes / y.sessions) : null,
       pace: y.runKm >= 0.5 ? y.runMinutes / y.runKm : null,
       avgHr: y.runHrMinutes > 0 ? Math.round(y.runBeats / y.runHrMinutes) : null,
@@ -610,4 +623,91 @@ export function byActivity(workouts, days = 365) {
       avgMin: Math.round(t.minutes / t.sessions),
     }))
     .sort((a, b) => b.minutes - a.minutes);
+}
+
+/**
+ * Runs of consecutive days that each had a qualifying run — by default one of
+ * at least 10 km. Returns the longest streaks with their dates, and whether
+ * one is still alive (today or yesterday counts as alive; a day skipped ends
+ * it). Several runs on one day count once; a day's qualifying distance is the
+ * longest single run that day, not the sum.
+ */
+export function runStreaks(workouts, minKm = 10, top = 5) {
+  const best = new Map();
+  for (const w of workouts ?? []) {
+    if (w.type !== 37 || !w.metres) continue;
+    best.set(w.date, Math.max(best.get(w.date) ?? 0, w.metres / 1000));
+  }
+  const days = [...best.entries()]
+    .filter(([, km]) => km >= minKm)
+    .map(([date]) => date)
+    .sort();
+
+  const dayNum = (key) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
+  };
+
+  const streaks = [];
+  let start = null;
+  let prev = null;
+  for (const date of days) {
+    if (prev != null && dayNum(date) === dayNum(prev) + 1) {
+      prev = date;
+      continue;
+    }
+    if (start) streaks.push({ start, end: prev, days: dayNum(prev) - dayNum(start) + 1 });
+    start = date;
+    prev = date;
+  }
+  if (start) streaks.push({ start, end: prev, days: dayNum(prev) - dayNum(start) + 1 });
+
+  const today = dayNum(new Date().toISOString().slice(0, 10));
+  const last = streaks[streaks.length - 1];
+  const current = last && today - dayNum(last.end) <= 1 ? last : null;
+
+  return {
+    minKm,
+    current,
+    longest: [...streaks].sort((a, b) => b.days - a.days || b.end.localeCompare(a.end)).slice(0, top),
+    qualifyingDays: days.length,
+  };
+}
+
+const HALF_KM = 21.0975;
+
+/**
+ * Personal records from the runs: fastest and slowest at the streak distance,
+ * longest ever, and every half marathon or longer. Pace is the run's own
+ * average; a 10 km split inside a longer run is not separable from Health data.
+ */
+export function runRecords(workouts, minKm = 10) {
+  const runs = (workouts ?? [])
+    .filter((w) => w.type === 37 && w.metres >= minKm * 1000 && w.durationMin > 0)
+    .map((w) => ({ ...w, km: w.metres / 1000, pace: w.durationMin / (w.metres / 1000) }));
+  if (!runs.length) return null;
+  const byPace = [...runs].sort((a, b) => a.pace - b.pace);
+  const longest = [...runs].sort((a, b) => b.km - a.km)[0];
+  const halves = runs.filter((w) => w.km >= HALF_KM - 0.1).sort((a, b) => b.start.localeCompare(a.start));
+  const halvesByYear = new Map();
+  for (const h of halves) halvesByYear.set(h.date.slice(0, 4), (halvesByYear.get(h.date.slice(0, 4)) ?? 0) + 1);
+  // The longest run of each year, with its own pace and heart rate.
+  const longestByYear = new Map();
+  for (const w of (workouts ?? []).filter((x) => x.type === 37 && x.metres > 0 && x.durationMin > 0)) {
+    const year = w.date.slice(0, 4);
+    const held = longestByYear.get(year);
+    if (!held || w.metres > held.metres) {
+      longestByYear.set(year, { ...w, km: w.metres / 1000, pace: w.durationMin / (w.metres / 1000) });
+    }
+  }
+  return {
+    minKm,
+    count: runs.length,
+    longestByYear: [...longestByYear.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([, w]) => w),
+    fastest: byPace[0],
+    slowest: byPace[byPace.length - 1],
+    longest,
+    halves,
+    halvesByYear: [...halvesByYear.entries()].sort((a, b) => b[0].localeCompare(a[0])),
+  };
 }
