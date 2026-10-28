@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '../charts';
-import { formatDuration, monthlySummary, monthlyTotals } from '../lib/workouts';
+import { formatDuration, formatPaceMin, monthlySummary, monthlyTotals } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
@@ -19,7 +19,10 @@ export default function MonthlyCard({ workouts, targets }) {
   return (
     <Card>
       <Text style={styles.title}>Monthly totals</Text>
-      <Text style={styles.body}>Kilometres run per month, last twelve months.</Text>
+      <Text style={styles.body}>
+        Kilometres run per month, last twelve months. Pace is min/km across the month’s runs,
+        weighted by distance.
+      </Text>
       <BarChart
         bars={bars.map((m) => ({ label: m.label, value: m.runKm }))}
         target={targets?.runKm > 0 ? targets.runKm : null}
@@ -31,6 +34,7 @@ export default function MonthlyCard({ workouts, targets }) {
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
         <Text style={[styles.cell, styles.headText]}>Min</Text>
         <Text style={[styles.cell, styles.headText]}>Run km</Text>
+        <Text style={[styles.cell, styles.headText]}>Pace</Text>
         <Text style={[styles.cell, styles.headText]}>Walk km</Text>
         <Text style={[styles.cell, styles.headText]}>Sess.</Text>
       </View>
@@ -48,6 +52,7 @@ export default function MonthlyCard({ workouts, targets }) {
             {m.met.runKm != null ? (m.met.runKm ? '✓ ' : '') : ''}
             {m.runKm}
           </Text>
+          <Text style={styles.cell}>{formatPaceMin(m.pace)}</Text>
           <Text style={styles.cell}>{m.walkKm}</Text>
           <Text style={styles.cell}>{m.sessions}</Text>
         </View>
@@ -56,6 +61,7 @@ export default function MonthlyCard({ workouts, targets }) {
         <Text style={[styles.cell, styles.month]}>{new Date().getFullYear()} to date</Text>
         <Text style={[styles.cell, styles.summaryText]}>{formatDuration(ytd.minutes)}</Text>
         <Text style={[styles.cell, styles.summaryText]}>{ytd.runKm}</Text>
+        <Text style={[styles.cell, styles.summaryText]}>{formatPaceMin(ytd.pace)}</Text>
         <Text style={[styles.cell, styles.summaryText]}>{ytd.walkKm}</Text>
         <Text style={[styles.cell, styles.summaryText]}>{ytd.sessions}</Text>
       </View>
@@ -66,6 +72,7 @@ export default function MonthlyCard({ workouts, targets }) {
         </Text>
         <Text style={[styles.cell, styles.summaryText]}>{formatDuration(average.minutes)}</Text>
         <Text style={[styles.cell, styles.summaryText]}>{average.runKm}</Text>
+        <Text style={[styles.cell, styles.summaryText]}>{formatPaceMin(average.pace)}</Text>
         <Text style={[styles.cell, styles.summaryText]}>{average.walkKm}</Text>
         <Text style={[styles.cell, styles.summaryText]}>{average.sessions}</Text>
       </View>
