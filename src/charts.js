@@ -215,7 +215,7 @@ export function TimeChart({
  * @param bars    [{ label, value }] in display order
  * @param target  number or null — drawn as a dashed line
  */
-export function BarChart({ bars, target, format = (v) => String(Math.round(v)), height = 140 }) {
+export function BarChart({ bars, target, format = (v) => String(Math.round(v)), height = 140, onBarPress }) {
   const [width, setWidth] = useState(0);
   if (!bars?.length) return null;
   const plotH = height - PAD_TOP - PAD_BOTTOM;
@@ -253,6 +253,12 @@ export function BarChart({ bars, target, format = (v) => String(Math.round(v)), 
                 ) : null}
                 {labelled(i) ? (
                   <Text style={[styles.dateLabel, { left: x + barW / 2 - 28, top: baseline + 4 }]}>{b.label}</Text>
+                ) : null}
+                {onBarPress ? (
+                  <Pressable
+                    onPress={() => onBarPress(b, i)}
+                    style={{ position: 'absolute', left: PAD_LEFT + slot * i, top: PAD_TOP, width: slot, height: plotH + PAD_BOTTOM }}
+                  />
                 ) : null}
               </View>
             );

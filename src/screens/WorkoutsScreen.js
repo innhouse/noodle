@@ -25,6 +25,7 @@ import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill, Segmented } from '../ui';
 import KpiCard from './KpiCard';
 import MonthlyCard from './MonthlyCard';
+import MonthSheet from './MonthSheet';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -39,6 +40,7 @@ export default function WorkoutsScreen() {
   const [notes, setNotes] = useState({});
   const workouts = applyNotes(recorded, notes);
   const [noting, setNoting] = useState(null);
+  const [month, setMonth] = useState(null);
   const [footType, setFootType] = useState(null);
 
   useEffect(() => {
@@ -179,7 +181,12 @@ export default function WorkoutsScreen() {
         </Card>
       ) : null}
 
-      {workouts.length ? <MonthlyCard workouts={workouts} targets={profile?.monthly} events={profile?.events} /> : null}
+      {workouts.length ? <MonthlyCard
+          workouts={workouts}
+          targets={profile?.monthly}
+          events={profile?.events}
+          onMonthPress={setMonth}
+        /> : null}
 
       {weeks.map((week) => (
         <View key={week.week}>
@@ -207,6 +214,19 @@ export default function WorkoutsScreen() {
           Tap a session to note how it felt. Strength sessions from Jefit arrive as a duration and
           heart rate only; Health has no place for sets, reps or weight lifted.
         </Text>
+      ) : null}
+
+      {month ? (
+        <MonthSheet
+          month={month}
+          workouts={workouts}
+          notes={notes}
+          onPick={(workout) => {
+            setMonth(null);
+            setNoting(workout);
+          }}
+          onClose={() => setMonth(null)}
+        />
       ) : null}
 
       {noting ? (

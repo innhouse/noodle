@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '../charts';
 import {
@@ -17,7 +17,7 @@ import { Card } from '../ui';
  * month is marked as partial so a low number three days in doesn't read as a
  * bad month. Optional targets from Settings tick or cross each month.
  */
-export default function MonthlyCard({ workouts, targets, events: eventText }) {
+export default function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
   const months = monthlyTotals(workouts, targets ?? {}, 12);
   if (!months.some((m) => m.sessions > 0)) return null;
   const bars = [...months].reverse();
@@ -36,11 +36,13 @@ export default function MonthlyCard({ workouts, targets, events: eventText }) {
         session that month — the dose, for reading alongside the heart data.
       </Text>
       <BarChart
-        bars={bars.map((m) => ({ label: m.label, value: m.runKm }))}
+        bars={bars.map((m) => ({ label: m.label, value: m.runKm, month: m.month }))}
         target={targets?.runKm > 0 ? targets.runKm : null}
         format={(v) => `${Math.round(v)}`}
         height={120}
+        onBarPress={onMonthPress ? (bar) => onMonthPress(bar.month) : undefined}
       />
+      {onMonthPress ? <Text style={styles.tapHint}>Tap a bar or a month to see its sessions.</Text> : null}
 
       {years.length > 1 ? (
         <>
@@ -94,7 +96,11 @@ export default function MonthlyCard({ workouts, targets, events: eventText }) {
             </Text>
           </View>
         ) : (
-          <View key={entry.row.month} style={styles.row}>
+          <Pressable
+            key={entry.row.month}
+            style={styles.row}
+            onPress={onMonthPress ? () => onMonthPress(entry.row.month) : undefined}
+          >
             <Text style={[styles.cell, styles.month]}>
               {entry.row.label}
               {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
@@ -110,7 +116,7 @@ export default function MonthlyCard({ workouts, targets, events: eventText }) {
               {entry.row.met.minutes != null ? (entry.row.met.minutes ? '✓ ' : '') : ''}
               {entry.row.minutes}
             </Text>
-          </View>
+          </Pressable>
         )
       )}
       <SummaryRow label={`${year} to date`} cells={[ytd.runKm, formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—', ytd.minutes]} />
@@ -159,4 +165,5 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: fonts.tiny, color: colors.accent, fontWeight: '700' },
   summaryText: { fontWeight: '700' },
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, textAlign: 'right' },
+  tapHint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'right', marginTop: spacing.xs },
 });
