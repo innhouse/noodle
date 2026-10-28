@@ -36,7 +36,7 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  */
 export default function WorkoutsScreen() {
   const { user, profile } = useAuth();
-  const { series, workouts: recorded, loading, denied, capturedAt } = useHealthData();
+  const { series, workouts: recorded, loading, refreshing, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
   const workouts = applyNotes(recorded, notes);
   const [noting, setNoting] = useState(null);
@@ -48,7 +48,7 @@ export default function WorkoutsScreen() {
     return watchWorkoutNotes(user.uid, setNotes);
   }, [user]);
 
-  if (loading && !workouts.length) {
+  if ((loading || refreshing) && !workouts.length) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -77,6 +77,8 @@ export default function WorkoutsScreen() {
           ? `${workouts.length} session${workouts.length === 1 ? '' : 's'} in the last year`
           : 'From Apple Health'}
       </Text>
+
+      {refreshing ? <Text style={styles.refreshNote}>Checking Apple Health for new sessions…</Text> : null}
 
       {capturedAt ? (
         <Text style={styles.syncNote}>
@@ -318,6 +320,7 @@ const styles = StyleSheet.create({
 
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md },
+  refreshNote: { fontSize: fonts.tiny, color: colors.inkSoft, marginBottom: spacing.sm },
   syncNote: {
     fontSize: fonts.tiny,
     color: colors.accent,
