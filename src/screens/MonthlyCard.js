@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '../charts';
@@ -19,14 +20,23 @@ import { Card } from '../ui';
  * month is marked as partial so a low number three days in doesn't read as a
  * bad month. Optional targets from Settings tick or cross each month.
  */
-export default function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
-  const months = monthlyTotals(workouts, targets ?? {}, 12);
+function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
+  const computed = useMemo(() => {
+    const months = monthlyTotals(workouts, targets ?? {}, 12);
+    return {
+      months,
+      summary: monthlySummary(months),
+      years: yearlyTotals(workouts),
+      activities: byActivity(workouts, 365),
+    };
+  }, [workouts, targets]);
+  const months = computed.months;
   if (!months.some((m) => m.sessions > 0)) return null;
   const bars = [...months].reverse();
-  const { ytd, average } = monthlySummary(months);
+  const { ytd, average } = computed.summary;
   const year = new Date().getFullYear();
-  const years = yearlyTotals(workouts);
-  const activities = byActivity(workouts, 365);
+  const years = computed.years;
+  const activities = computed.activities;
   const events = parseEvents(eventText);
   const monthRows = withEventDividers(months, events, (m) => `${m.month}-31`);
 
@@ -278,3 +288,5 @@ const styles = StyleSheet.create({
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, textAlign: 'right' },
   tapHint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'right', marginTop: spacing.xs },
 });
+
+export default memo(MonthlyCard);

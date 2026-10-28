@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatDayLabel } from '../lib/dates';
@@ -10,9 +11,9 @@ import { Card } from '../ui';
  * large at the top; the longest ever are listed with their dates, so a streak
  * from a past year stays on the record even after it ends.
  */
-export default function StreakCard({ workouts, minKm = 10, onPick }) {
-  const { current, longest, qualifyingDays } = runStreaks(workouts, minKm);
-  const records = runRecords(workouts, minKm);
+function StreakCard({ workouts, minKm = 10, onPick }) {
+  const { current, longest, qualifyingDays } = useMemo(() => runStreaks(workouts, minKm), [workouts, minKm]);
+  const records = useMemo(() => runRecords(workouts, minKm), [workouts, minKm]);
   if (!qualifyingDays) return null;
 
   return (
@@ -132,3 +133,5 @@ const styles = StyleSheet.create({
   dates: { flex: 1, fontSize: fonts.tiny, color: colors.inkSoft },
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, textAlign: 'right' },
 });
+
+export default memo(StreakCard);

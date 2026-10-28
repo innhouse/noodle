@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { weeklyKpis } from '../lib/workouts';
@@ -14,7 +15,7 @@ const LABELS = { runs: 'Runs', strength: 'Strength', other: 'Other', walks: 'Wal
  * Counts sessions, not minutes, because the plan is about showing up for each
  * kind of training; the minutes chart next door covers how much.
  */
-export default function KpiCard({ workouts, kpis, history = 8, compact = false }) {
+function KpiCard({ workouts, kpis, history = 8, compact = false }) {
   const weeks = weeklyKpis(workouts, kpis, compact ? 1 : history);
   const current = weeks[0];
   const goals = current.goals;
@@ -107,3 +108,5 @@ const styles = StyleSheet.create({
   historyCell: { flex: 1, fontSize: fonts.tiny, fontWeight: '700', textAlign: 'center' },
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, textAlign: 'right' },
 });
+
+export default memo(KpiCard);

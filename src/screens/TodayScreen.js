@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
@@ -37,7 +37,7 @@ export default function TodayScreen() {
   const { user, profile } = useAuth();
   const { series, workouts: recorded, loading, refreshing, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
-  const workouts = applyNotes(recorded, notes);
+  const workouts = useMemo(() => applyNotes(recorded, notes), [recorded, notes]);
   const [weights, setWeights] = useState([]);
   const [noting, setNoting] = useState(null);
   const today = dayKey();
