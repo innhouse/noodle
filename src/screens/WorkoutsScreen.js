@@ -142,12 +142,19 @@ export default function WorkoutsScreen() {
             />
           ) : null}
           {efficiency.sessions.length >= 2 ? (
-          <TimeChart
-            points={efficiency.sessions.map((w) => ({ date: w.date, value: w.beatsPerKm }))}
-            band={null}
-            outside="none"
-            format={(v) => String(Math.round(v))}
-          />
+            <>
+              <TimeChart
+                points={efficiency.sessions.map((w) => ({ id: w.id, date: w.date, value: w.beatsPerKm }))}
+                band={null}
+                outside="none"
+                format={(v) => String(Math.round(v))}
+                onPointPress={(point) => {
+                  const session = efficiency.sessions.find((w) => w.id === point.id);
+                  if (session) setNoting(session);
+                }}
+              />
+              <Text style={styles.effHint}>Tap a dot to open that session.</Text>
+            </>
           ) : (
             <Text style={styles.effTrend}>Not enough {which === 'all' ? 'sessions' : which} yet.</Text>
           )}
@@ -312,6 +319,7 @@ const styles = StyleSheet.create({
   effTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
   effBody: { fontSize: fonts.tiny, color: colors.inkSoft, lineHeight: 17, marginTop: spacing.xs },
   segmented: { marginTop: spacing.md },
+  effHint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'right', marginTop: spacing.xs },
   effTrend: { fontSize: fonts.small, color: colors.ink, marginTop: spacing.md, lineHeight: 20 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

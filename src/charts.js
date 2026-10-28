@@ -13,7 +13,7 @@
  * are decided by the caller, who knows what the metric means.
  */
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from './theme';
 
@@ -45,6 +45,7 @@ function monthYear(key) {
  * @param format    value → string for labels
  * @param labels    'all' | 'ends' | 'none' — which dots get a value label
  * @param height    px
+ * @param onPointPress  called with the point when a dot is tapped
  */
 export function TimeChart({
   points,
@@ -54,6 +55,7 @@ export function TimeChart({
   labels = 'all',
   height = 150,
   dateStyle = 'auto',
+  onPointPress,
 }) {
   const [width, setWidth] = useState(0);
   const sorted = [...(points ?? [])].sort((a, b) => a.date.localeCompare(b.date));
@@ -136,10 +138,15 @@ export function TimeChart({
     labelThese.add(sorted[0].date);
     labelThese.add(sorted[sorted.length - 1].date);
   }
-  // Date labels: every point when sparse, else first / middle / last.
-  const dateLabels = dense
-    ? [sorted[0], sorted[Math.floor(sorted.length / 2)], sorted[sorted.length - 1]]
-    : sorted;
+  // Date labels: as many as fit without overlapping, always including the ends.
+  const maxLabels = Math.max(2, Math.floor(plotW / 64));
+  const step = Math.max(1, Math.ceil(sorted.length / maxLabels));
+  const dateLabels = sorted.filter((p, i) => i % step === 0 || i === sorted.length - 1);
+  if (dateLabels.length >= 2) {
+    const a = dateLabels[dateLabels.length - 2];
+    const b = dateLabels[dateLabels.length - 1];
+    if (xFor(b.date) - xFor(a.date) < 56) dateLabels.splice(dateLabels.length - 2, 1);
+  }
   const fmtDate = dateStyle === 'month' || (dateStyle === 'auto' && t1 - t0 > 200 * 86_400_000) ? monthYear : shortDate;
 
   return (
@@ -176,12 +183,19 @@ export function TimeChart({
             const x = xFor(p.date);
             const y = yFor(p.value);
             const colour = isOut(p.value) ? colors.accent : colors.primary;
+            const hit = onPointPress ? 28 : dot;
             return (
-              <View key={p.date}>
+              <View key={p.id ?? p.date}>
                 {!dense ? <View style={[styles.stem, { left: x, top: y, height: baseline - y, backgroundColor: colour }]} /> : null}
                 <View style={[styles.dot, { width: dot, height: dot, borderRadius: dot / 2, left: x - dot / 2, top: y - dot / 2, backgroundColor: colour }]} />
                 {labelThese.has(p.date) ? (
                   <Text style={[styles.dotLabel, { left: x - 24, top: y - 20 }]}>{format(p.value)}</Text>
+                ) : null}
+                {onPointPress ? (
+                  <Pressable
+                    onPress={() => onPointPress(p)}
+                    style={{ position: 'absolute', left: x - hit / 2, top: y - hit / 2, width: hit, height: hit }}
+                  />
                 ) : null}
               </View>
             );
