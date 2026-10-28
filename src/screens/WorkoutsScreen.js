@@ -24,6 +24,7 @@ import { BarChart, TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill, Segmented } from '../ui';
 import KpiCard from './KpiCard';
+import MonthlyCard from './MonthlyCard';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -177,6 +178,8 @@ export default function WorkoutsScreen() {
           ) : null}
         </Card>
       ) : null}
+
+      {workouts.length ? <MonthlyCard workouts={workouts} targets={profile?.monthly} /> : null}
 
       {weeks.map((week) => (
         <View key={week.week}>

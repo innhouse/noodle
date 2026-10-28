@@ -38,6 +38,8 @@ export default function SettingsScreen() {
       kpiStrength: profile?.kpis?.strength ?? 2,
       kpiOther: profile?.kpis?.other ?? 1,
       kpiZoneMin: profile?.kpis?.zoneMin ?? 0,
+      monthlyMinutes: profile?.monthly?.minutes ?? 0,
+      monthlyRunKm: profile?.monthly?.runKm ?? 0,
       weightLb: displayLb(profile?.weightKg),
       feet: height.feet,
       inches: height.inches,
@@ -77,6 +79,10 @@ export default function SettingsScreen() {
       },
       zone1Low: Number(draft.zone1Low) || null,
       zone1High: Number(draft.zone1High) || null,
+      monthly: {
+        minutes: Number(draft.monthlyMinutes) || 0,
+        runKm: Number(draft.monthlyRunKm) || 0,
+      },
     });
     setSaved(true);
   }
@@ -204,6 +210,29 @@ export default function SettingsScreen() {
               onChangeText={(text) => set({ kpiZoneMin: text })}
               keyboardType="number-pad"
               placeholder="150"
+            />
+          </View>
+        </View>
+        <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
+          Monthly targets, if you want them. Leave at 0 for totals only.
+        </Text>
+        <View style={styles.kpiRow}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Minutes / month"
+              value={String(draft.monthlyMinutes ?? '')}
+              onChangeText={(text) => set({ monthlyMinutes: text })}
+              keyboardType="number-pad"
+              placeholder="0"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Km run / month"
+              value={String(draft.monthlyRunKm ?? '')}
+              onChangeText={(text) => set({ monthlyRunKm: text })}
+              keyboardType="decimal-pad"
+              placeholder="0"
             />
           </View>
         </View>
