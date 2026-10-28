@@ -104,7 +104,9 @@ export default function WorkoutsScreen() {
       ) : null}
 
       {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
-      {workouts.length ? <StreakCard workouts={workouts} minKm={profile?.streakKm ?? 10} /> : null}
+      {workouts.length ? (
+        <StreakCard workouts={workouts} minKm={profile?.streakKm ?? 10} onPick={setNoting} />
+      ) : null}
 
       {workouts.length ? (
         <Card>

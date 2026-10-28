@@ -660,3 +660,31 @@ export function runStreaks(workouts, minKm = 10, top = 5) {
     qualifyingDays: days.length,
   };
 }
+
+const HALF_KM = 21.0975;
+
+/**
+ * Personal records from the runs: fastest and slowest at the streak distance,
+ * longest ever, and every half marathon or longer. Pace is the run's own
+ * average; a 10 km split inside a longer run is not separable from Health data.
+ */
+export function runRecords(workouts, minKm = 10) {
+  const runs = (workouts ?? [])
+    .filter((w) => w.type === 37 && w.metres >= minKm * 1000 && w.durationMin > 0)
+    .map((w) => ({ ...w, km: w.metres / 1000, pace: w.durationMin / (w.metres / 1000) }));
+  if (!runs.length) return null;
+  const byPace = [...runs].sort((a, b) => a.pace - b.pace);
+  const longest = [...runs].sort((a, b) => b.km - a.km)[0];
+  const halves = runs.filter((w) => w.km >= HALF_KM - 0.1).sort((a, b) => b.start.localeCompare(a.start));
+  const halvesByYear = new Map();
+  for (const h of halves) halvesByYear.set(h.date.slice(0, 4), (halvesByYear.get(h.date.slice(0, 4)) ?? 0) + 1);
+  return {
+    minKm,
+    count: runs.length,
+    fastest: byPace[0],
+    slowest: byPace[byPace.length - 1],
+    longest,
+    halves,
+    halvesByYear: [...halvesByYear.entries()].sort((a, b) => b[0].localeCompare(a[0])),
+  };
+}

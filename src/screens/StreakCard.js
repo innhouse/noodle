@@ -1,7 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatDayLabel } from '../lib/dates';
-import { runStreaks } from '../lib/workouts';
+import { formatPaceMin, runRecords, runStreaks } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
@@ -10,8 +10,9 @@ import { Card } from '../ui';
  * large at the top; the longest ever are listed with their dates, so a streak
  * from a past year stays on the record even after it ends.
  */
-export default function StreakCard({ workouts, minKm = 10 }) {
+export default function StreakCard({ workouts, minKm = 10, onPick }) {
   const { current, longest, qualifyingDays } = runStreaks(workouts, minKm);
+  const records = runRecords(workouts, minKm);
   if (!qualifyingDays) return null;
 
   return (
@@ -50,7 +51,50 @@ export default function StreakCard({ workouts, minKm = 10 }) {
       <Text style={styles.hint}>
         A day counts when its longest run is at least {minKm} km. Threshold in Settings → Training.
       </Text>
+
+      {records ? (
+        <>
+          <Text style={[styles.sub, { marginTop: spacing.lg }]}>Records · runs of {minKm} km or more ({records.count})</Text>
+          <RecordRow label="Fastest" run={records.fastest} onPick={onPick} />
+          <RecordRow label="Slowest" run={records.slowest} onPick={onPick} />
+          <RecordRow label="Longest" run={records.longest} onPick={onPick} showKm />
+          {records.halves.length ? (
+            <>
+              <Text style={[styles.sub, { marginTop: spacing.md }]}>
+                Half marathons or longer · {records.halves.length}
+                {records.halvesByYear.length > 1
+                  ? ` (${records.halvesByYear.map(([y, n]) => `${y}: ${n}`).join(', ')})`
+                  : ''}
+              </Text>
+              {records.halves.slice(0, 8).map((h) => (
+                <Pressable key={h.id} onPress={onPick ? () => onPick(h) : undefined} style={styles.row}>
+                  <Text style={styles.days}>{h.km.toFixed(1)} km</Text>
+                  <Text style={styles.dates}>
+                    {longDate(h.date)} · {formatPaceMin(h.pace)} /km
+                    {h.avgHr ? ` · ${h.avgHr} bpm` : ''}
+                  </Text>
+                </Pressable>
+              ))}
+            </>
+          ) : null}
+        </>
+      ) : null}
     </Card>
+  );
+}
+
+function RecordRow({ label, run, onPick, showKm }) {
+  if (!run) return null;
+  return (
+    <Pressable onPress={onPick ? () => onPick(run) : undefined} style={styles.row}>
+      <Text style={styles.days}>{label}</Text>
+      <Text style={styles.dates}>
+        {showKm ? `${run.km.toFixed(1)} km · ` : ''}
+        {formatPaceMin(run.pace)} /km · {longDate(run.date)}
+        {!showKm ? ` · ${run.km.toFixed(1)} km` : ''}
+        {run.avgHr ? ` · ${run.avgHr} bpm` : ''}
+      </Text>
+    </Pressable>
   );
 }
 
