@@ -23,11 +23,18 @@ function MilestonesCard({ workouts, notes }) {
   const [open, setOpen] = useState(null);
   const [all, setAll] = useState(false);
   const [naming, setNaming] = useState(null); // { key, name }
+  const [undo, setUndo] = useState(null); // the suggestion just dismissed
+  const [showHidden, setShowHidden] = useState(false);
   const dismissed = profile?.milestoneDismissed;
 
   const milestones = useMemo(() => milestonesFrom(workouts), [workouts]);
   const suggestions = useMemo(() => suggestMilestones(workouts, dismissed ?? []), [workouts, dismissed]);
-  if (!milestones.length && !suggestions.length) return null;
+  // Dismissed ones, so a stray tap on ✕ can be put right.
+  const hidden = useMemo(
+    () => (dismissed?.length ? suggestMilestones(workouts, []).filter((m) => dismissed.includes(m.key)) : []),
+    [workouts, dismissed]
+  );
+  if (!milestones.length && !suggestions.length && !hidden.length) return null;
 
   const chosen = open ? milestones.find((m) => m.name === open) : null;
   const shown = all ? milestones : milestones.slice(0, SHOWN);
@@ -41,6 +48,12 @@ function MilestonesCard({ workouts, notes }) {
 
   function dismiss(suggestion) {
     updateProfile({ milestoneDismissed: [...(dismissed ?? []), suggestion.key] });
+    setUndo(suggestion);
+  }
+
+  function restore(suggestion) {
+    updateProfile({ milestoneDismissed: (dismissed ?? []).filter((k) => k !== suggestion.key) });
+    setUndo(null);
   }
 
   return (
@@ -95,16 +108,50 @@ function MilestonesCard({ workouts, notes }) {
                   <Text style={styles.name}>{s.name}</Text>
                   <Text style={styles.meta}>{line(s)}</Text>
                 </View>
-                <Pressable onPress={() => setNaming({ key: s.key, name: s.name })} hitSlop={8}>
-                  <Text style={styles.action}>Add</Text>
+                <Pressable onPress={() => setNaming({ key: s.key, name: s.name })} hitSlop={6} style={styles.addButton}>
+                  <Text style={styles.addText}>Add</Text>
                 </Pressable>
-                <Pressable onPress={() => dismiss(s)} hitSlop={8}>
-                  <Text style={styles.dismiss}>✕</Text>
+                <Pressable onPress={() => dismiss(s)} hitSlop={4} style={styles.dismissButton}>
+                  <Text style={styles.dismiss}>Hide</Text>
                 </Pressable>
               </View>
             )
           )}
           <Text style={styles.hint}>Add lets you rename it first — “Kilimanjaro” rather than “Trek”.</Text>
+        </>
+      ) : null}
+
+      {undo ? (
+        <View style={styles.undoBar}>
+          <Text style={styles.undoText} numberOfLines={1}>
+            Hid “{undo.name}”
+          </Text>
+          <Pressable onPress={() => restore(undo)} hitSlop={8}>
+            <Text style={styles.action}>Undo</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {hidden.length ? (
+        <>
+          <Pressable onPress={() => setShowHidden(!showHidden)} hitSlop={8}>
+            <Text style={styles.more}>
+              {showHidden ? 'Close hidden suggestions' : `Hidden suggestions (${hidden.length})`}
+            </Text>
+          </Pressable>
+          {showHidden
+            ? hidden.map((s) => (
+                <View key={s.key} style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>{s.name}</Text>
+                    <Text style={styles.meta}>{line(s)}</Text>
+                  </View>
+                  <Pressable onPress={() => restore(s)} hitSlop={8}>
+                    <Text style={styles.action}>Bring back</Text>
+                  </Pressable>
+                </View>
+              ))
+            : null}
         </>
       ) : null}
 
@@ -193,7 +240,12 @@ const styles = StyleSheet.create({
   chevron: { fontSize: fonts.title, color: colors.inkSoft },
   more: { fontSize: fonts.small, color: colors.primary, fontWeight: '700', marginTop: spacing.xs },
   action: { fontSize: fonts.small, color: colors.primary, fontWeight: '700', paddingHorizontal: spacing.xs },
-  dismiss: { fontSize: fonts.small, color: colors.inkSoft, paddingHorizontal: spacing.xs },
+  dismiss: { fontSize: fonts.tiny, color: colors.inkSoft },
+  addButton: { backgroundColor: colors.primarySoft, borderRadius: 999, paddingHorizontal: spacing.md, paddingVertical: 6 },
+  addText: { fontSize: fonts.small, color: colors.primary, fontWeight: '700' },
+  dismissButton: { marginLeft: spacing.lg, paddingVertical: 6 },
+  undoBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.bg, borderRadius: 10, padding: spacing.sm, marginTop: spacing.sm },
+  undoText: { flex: 1, fontSize: fonts.small, color: colors.ink, marginRight: spacing.sm },
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.xs },
   naming: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.line },
   nameInput: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius / 2, paddingHorizontal: spacing.sm, paddingVertical: 6, fontSize: fonts.body, color: colors.ink, backgroundColor: colors.card },
