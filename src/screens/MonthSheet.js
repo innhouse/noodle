@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { formatDayLabel, formatTime } from '../lib/dates';
 import {
+  activityGroup,
   beatsPerKm,
   describeType,
   formatDuration,
@@ -105,7 +106,7 @@ function ActivityHistory({ type, workouts, notes, onPick, onClose }) {
   const [year, setYear] = useState(null);
   const { icon, label } = describeType(type);
   const sessions = (workouts ?? [])
-    .filter((w) => w.type === type)
+    .filter((w) => activityGroup(w.type) === type)
     .sort((a, b) => b.start.localeCompare(a.start));
 
   const byYear = new Map();
@@ -174,7 +175,8 @@ function ActivityHistory({ type, workouts, notes, onPick, onClose }) {
 function summarise(sessions) {
   const byType = new Map();
   for (const w of sessions) {
-    const g = byType.get(w.type) ?? { type: w.type, ...describeType(w.type), sessions: [], minutes: 0, metres: 0, beats: 0, hrMinutes: 0 };
+    const group = activityGroup(w.type);
+    const g = byType.get(group) ?? { type: group, ...describeType(group), sessions: [], minutes: 0, metres: 0, beats: 0, hrMinutes: 0 };
     g.sessions.push(w);
     g.minutes += w.durationMin ?? 0;
     g.metres += w.metres ?? 0;
@@ -182,7 +184,7 @@ function summarise(sessions) {
       g.beats += w.avgHr * w.durationMin;
       g.hrMinutes += w.durationMin;
     }
-    byType.set(w.type, g);
+    byType.set(group, g);
   }
   return [...byType.values()].sort((a, b) => b.minutes - a.minutes);
 }
