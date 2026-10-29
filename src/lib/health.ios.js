@@ -28,6 +28,7 @@ const SLEEP_ANALYSIS = 'HKCategoryTypeIdentifierSleepAnalysis';
 const HEART_RATE = 'HKQuantityTypeIdentifierHeartRate';
 const HR_RECOVERY = 'HKQuantityTypeIdentifierHeartRateRecoveryOneMinute';
 const WORKOUT = 'HKWorkoutTypeIdentifier';
+const WORKOUT_ROUTE = 'HKWorkoutRouteTypeIdentifier';
 
 // HKCategoryValueSleepAnalysis. inBed (0) and awake (2) are not sleep — counting
 // them would turn a restless night into a long one.
@@ -40,6 +41,7 @@ const READ_TYPES = [
   SLEEP_ANALYSIS,
   HEART_RATE,
   WORKOUT,
+  WORKOUT_ROUTE,
   ...Object.values(HEALTH_METRICS).map((metric) => metric.id),
 ];
 
@@ -516,4 +518,35 @@ export async function healthSeries(days = 90) {
   }
 
   return { ...Object.fromEntries(entries), sleep };
+}
+
+// A route is thinned to about this many points: plenty for a map the width of
+// a phone, and small enough to keep in the account for the web.
+const ROUTE_POINTS = 400;
+
+/**
+ * The GPS route recorded with a workout, as [[lat, lon], …], or [] when the
+ * workout has none (indoor, phone-only, or an app that saved no route). Null
+ * when the workout itself can't be found.
+ */
+export async function workoutRoute(uuid) {
+  const found = await queryWorkoutSamples({ limit: 1, filter: { uuid } });
+  const workout = found?.[0];
+  if (!workout) return null;
+  const routes = await workout.getWorkoutRoutes();
+  const all = [];
+  for (const route of routes ?? []) {
+    for (const l of route.locations ?? []) {
+      // Skip fixes the phone itself marked as poor.
+      if (l.horizontalAccuracy != null && l.horizontalAccuracy > 50) continue;
+      if (typeof l.latitude !== 'number' || typeof l.longitude !== 'number') continue;
+      all.push([round(l.latitude, 5), round(l.longitude, 5)]);
+    }
+  }
+  if (all.length <= ROUTE_POINTS) return all;
+  const step = all.length / ROUTE_POINTS;
+  const thinned = [];
+  for (let i = 0; i < ROUTE_POINTS; i += 1) thinned.push(all[Math.floor(i * step)]);
+  thinned.push(all[all.length - 1]);
+  return thinned;
 }

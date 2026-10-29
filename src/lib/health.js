@@ -40,3 +40,7 @@ export async function healthSeries() {
 export async function sleepNightsSince() {
   return [];
 }
+
+export async function workoutRoute() {
+  return null;
+}

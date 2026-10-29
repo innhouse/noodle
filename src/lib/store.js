@@ -9,6 +9,7 @@
  *   users/{uid}/labs/{YYYY-MM-DD}     one blood test, typed in from the report
  *   users/{uid}/health/snapshot       daily series mirrored from Apple Health
  *   users/{uid}/sleep/{YYYY-MM-DD}    one night's sleep, mirrored from Apple Health
+ *   users/{uid}/routes/{workoutId}    a session's GPS route, thinned, as flat lat,lon pairs
  *
  * Apple Health stays the source of truth for everything mirrored here. The copies
  * exist so the web app can show the same numbers, and they are stamped with when
@@ -75,6 +76,34 @@ export async function saveWeights(uid, entries, source = 'health') {
     }
     await batch.commit();
   }
+}
+
+// --- Routes ------------------------------------------------------------------
+
+/**
+ * A session's route: undefined while loading, null when none is stored yet,
+ * else { points: [[lat, lon], …] } — empty points meaning Health had no route.
+ * Firestore has no nested arrays, so the pairs are stored flat.
+ */
+export function watchRoute(uid, workoutId, callback) {
+  return onSnapshot(
+    doc(db, 'users', uid, 'routes', workoutId),
+    (snapshot) => {
+      if (!snapshot.exists()) return callback(null);
+      const flat = snapshot.data().flat ?? [];
+      const points = [];
+      for (let i = 0; i + 1 < flat.length; i += 2) points.push([flat[i], flat[i + 1]]);
+      return callback({ points });
+    },
+    (error) => console.warn('route watch failed', error)
+  );
+}
+
+export function saveRoute(uid, workoutId, points) {
+  return setDoc(doc(db, 'users', uid, 'routes', workoutId), {
+    flat: points.flat(),
+    capturedAt: new Date().toISOString(),
+  });
 }
 
 // --- Sleep history ---------------------------------------------------------
