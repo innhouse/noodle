@@ -119,7 +119,16 @@ function Drawing({ points, width, height }) {
   const ys = projected.map((p) => p.y);
   const originX = (Math.max(...xs) + Math.min(...xs)) / 2 - width / 2;
   const originY = (Math.max(...ys) + Math.min(...ys)) / 2 - height / 2;
-  const local = projected.map((p) => ({ x: p.x - originX, y: p.y - originY }));
+  // Points closer than a few pixels are merged: tiny rotated segments leave
+  // hairline gaps, which turned dense tracks into dashes.
+  const local = [];
+  for (const p of projected) {
+    const q = { x: p.x - originX, y: p.y - originY };
+    const last = local[local.length - 1];
+    if (!last || Math.hypot(q.x - last.x, q.y - last.y) >= 3) local.push(q);
+  }
+  const lastPoint = projected[projected.length - 1];
+  local.push({ x: lastPoint.x - originX, y: lastPoint.y - originY });
 
   const tiles = [];
   const max = 2 ** z;
@@ -153,7 +162,7 @@ function Drawing({ points, width, height }) {
           {
             left: (a.x + b.x) / 2 - length / 2,
             top: (a.y + b.y) / 2 - 2,
-            width: length + 1,
+            width: length + 3,
             transform: [{ rotate: `${Math.atan2(dy, dx)}rad` }],
           },
         ]}
