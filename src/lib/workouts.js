@@ -9,6 +9,8 @@
  * compared only with the same person's earlier ones.
  */
 
+import { dayKey } from './dates';
+
 // HKWorkoutActivityType → what to call it. Anything missing falls back to 'Workout'.
 export const WORKOUT_TYPES = {
   4: { label: 'Badminton', icon: '🏸', kind: 'other' },
@@ -624,9 +626,13 @@ export function withEventDividers(rows, events, dateOf) {
 
 /** Each activity type over a window: sessions, total minutes, average length. */
 export function byActivity(workouts, days = 365) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  const from = cutoff.toISOString().slice(0, 10);
+  // days = null: every session ever recorded.
+  let from = '';
+  if (days != null) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    from = dayKey(cutoff);
+  }
   const totals = new Map();
   for (const w of workouts ?? []) {
     if (w.date < from) continue;

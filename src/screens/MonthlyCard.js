@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '../charts';
@@ -21,22 +21,22 @@ import { Card } from '../ui';
  * bad month. Optional targets from Settings tick or cross each month.
  */
 function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
+  const [allTime, setAllTime] = useState(false);
   const computed = useMemo(() => {
     const months = monthlyTotals(workouts, targets ?? {}, 12);
     return {
       months,
       summary: monthlySummary(months),
       years: yearlyTotals(workouts),
-      activities: byActivity(workouts, 365),
     };
   }, [workouts, targets]);
+  const activities = useMemo(() => byActivity(workouts, allTime ? null : 365), [workouts, allTime]);
   const months = computed.months;
   if (!months.some((m) => m.sessions > 0)) return null;
   const bars = [...months].reverse();
   const { ytd, average } = computed.summary;
   const year = new Date().getFullYear();
   const years = computed.years;
-  const activities = computed.activities;
   const events = parseEvents(eventText);
   const monthRows = withEventDividers(months, events, (m) => `${m.month}-31`);
 
@@ -219,7 +219,17 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
 
       {activities.length ? (
         <>
-          <Text style={styles.section}>By activity, last 12 months</Text>
+          <View style={styles.sectionRow}>
+            <Text style={[styles.section, { flex: 1 }]}>By activity</Text>
+            {[
+              ['12 months', false],
+              ['All time', true],
+            ].map(([label, value]) => (
+              <Pressable key={label} onPress={() => setAllTime(value)} hitSlop={6}>
+                <Text style={[styles.chip, allTime === value && styles.chipOn]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
           <View style={[styles.row, styles.head]}>
             <Text style={[styles.cell, styles.month, styles.headText]}>Activity</Text>
             <Text style={[styles.cell, styles.headText]}>Sessions</Text>
@@ -227,15 +237,20 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
             <Text style={[styles.cell, styles.headText]}>Avg</Text>
           </View>
           {activities.map((a) => (
-            <View key={a.type} style={styles.row}>
+            <Pressable
+              key={a.type}
+              style={styles.row}
+              onPress={onMonthPress ? () => onMonthPress(`activity:${a.type}`) : undefined}
+            >
               <Text style={[styles.cell, styles.month]}>
                 {a.icon} {a.label}
               </Text>
               <Text style={styles.cell}>{a.sessions}</Text>
               <Text style={styles.cell}>{formatDuration(a.minutes)}</Text>
               <Text style={styles.cell}>{formatDuration(a.avgMin)}</Text>
-            </View>
+            </Pressable>
           ))}
+          {onMonthPress ? <Text style={styles.tapHint}>Tap an activity to see its history year by year.</Text> : null}
         </>
       ) : null}
 
@@ -282,6 +297,9 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: fonts.tiny, color: colors.accent, fontWeight: '700' },
   summaryText: { fontWeight: '700' },
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, textAlign: 'right' },
+  sectionRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+  chip: { fontSize: fonts.tiny, color: colors.inkSoft, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, overflow: 'hidden' },
+  chipOn: { color: colors.card, backgroundColor: colors.primary },
   tapHint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'right', marginTop: spacing.xs },
 });
 
