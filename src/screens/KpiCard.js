@@ -5,7 +5,9 @@ import { weeklyKpis } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
-const LABELS = { runs: 'Runs', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1 min', yogaMin: 'Yoga min' };
+const LABELS = { runs: 'Runs', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', yogaMin: 'Yoga' };
+// Targets counted in minutes rather than sessions.
+const MINUTES = new Set(['zoneMin', 'yogaMin']);
 
 /**
  * The week's mix against the plan: runs, strength sessions and other activity,
@@ -36,9 +38,16 @@ function KpiCard({ workouts, kpis, history = 8, compact = false }) {
           const met = current.met[k];
           return (
             <View key={k} style={[styles.cell, met && styles.cellMet]}>
-              <Text style={[styles.cellValue, met && styles.cellValueMet]}>
+              <Text
+                style={[styles.cellValue, met && styles.cellValueMet]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
                 {current.counts[k]}
-                <Text style={styles.cellGoal}> / {goals[k]}</Text>
+              </Text>
+              <Text style={styles.cellGoal} numberOfLines={1}>
+                of {goals[k]}
+                {MINUTES.has(k) ? ' min' : ''}
               </Text>
               <Text style={[styles.cellLabel, met && styles.cellLabelMet]}>
                 {met ? '✓ ' : ''}
@@ -97,8 +106,8 @@ const styles = StyleSheet.create({
   cellMet: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   cellValue: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   cellValueMet: { color: colors.primary },
-  cellGoal: { fontSize: fonts.small, fontWeight: '600', color: colors.inkSoft },
-  cellLabel: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 2, fontWeight: '600' },
+  cellGoal: { fontSize: fonts.tiny, fontWeight: '600', color: colors.inkSoft },
+  cellLabel: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: 4, fontWeight: '700' },
   cellLabelMet: { color: colors.primary },
 
   history: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: spacing.sm },
