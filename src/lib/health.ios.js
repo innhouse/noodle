@@ -175,6 +175,19 @@ export async function workoutsSince(since, options = {}) {
       // Already mirrored: reuse it rather than re-querying its heart rate, unless
       // a zone has been set since and this session is recent enough to count.
       const existing = known?.get?.(workout.uuid);
+      // Mirrored before without heart rate: look once at the watch's own
+      // readings for that window — apps such as Nike Run Club write the run but
+      // leave the heart rate unattached, even when the watch recorded it.
+      if (existing && existing.avgHr == null && !existing.hrChecked) {
+        const hr = await heartRateDuring(start, end);
+        results.push({
+          ...existing,
+          avgHr: hr?.avg ?? null,
+          maxHr: hr?.max ?? existing.maxHr ?? null,
+          hrChecked: true,
+        });
+        continue;
+      }
       if (existing) {
         const wantsZone =
           zone?.low != null &&
@@ -197,7 +210,14 @@ export async function workoutsSince(since, options = {}) {
         avgHr = stats?.averageQuantity?.quantity ?? null;
         maxHr = stats?.maximumQuantity?.quantity ?? null;
       } catch {
-        // No heart-rate samples for this session; common for phone-only entries.
+        // No heart-rate samples attached to this session.
+      }
+      // Nothing attached: fall back to whatever the watch recorded in that
+      // window. A run recorded on the phone alone still has none.
+      if (avgHr == null) {
+        const hr = await heartRateDuring(start, end);
+        avgHr = hr?.avg ?? null;
+        maxHr = hr?.max ?? maxHr;
       }
 
       // Minutes inside the person's own zone 1, from the session's heart-rate
@@ -221,6 +241,7 @@ export async function workoutsSince(since, options = {}) {
           ? round(quantityIn(workout.totalEnergyBurned, 'kcal'), 0)
           : null,
         avgHr: avgHr == null ? null : Math.round(avgHr),
+        hrChecked: true,
         maxHr: maxHr == null ? null : Math.round(maxHr),
         hrr: recoveryFor(recoveries, end),
         zoneMin,
@@ -234,6 +255,38 @@ export async function workoutsSince(since, options = {}) {
     }
   }
   return results;
+}
+
+/**
+ * Average and peak heart rate from every reading Health holds between two
+ * times, whichever app or device wrote them. Each reading is weighted by the
+ * time until the next (capped at a minute), so a burst of readings during a
+ * hill doesn't outweigh a quiet stretch. Null when there are fewer than three.
+ */
+async function heartRateDuring(start, end) {
+  try {
+    const samples = await queryQuantitySamples(HEART_RATE, {
+      limit: 0,
+      ascending: true,
+      unit: 'count/min',
+      filter: { date: { startDate: start, endDate: end } },
+    });
+    const list = (samples ?? [])
+      .map((s) => ({ at: new Date(s.startDate).getTime(), bpm: s.quantity }))
+      .filter((s) => typeof s.bpm === 'number' && s.bpm > 0);
+    if (list.length < 3) return null;
+    let weighted = 0;
+    let total = 0;
+    for (let i = 0; i < list.length; i += 1) {
+      const next = i + 1 < list.length ? list[i + 1].at : end.getTime();
+      const gap = Math.max(1000, Math.min(60_000, next - list[i].at));
+      weighted += list[i].bpm * gap;
+      total += gap;
+    }
+    return { avg: Math.round(weighted / total), max: Math.round(Math.max(...list.map((s) => s.bpm))) };
+  } catch {
+    return null;
+  }
 }
 
 /**
