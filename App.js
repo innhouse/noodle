@@ -14,12 +14,11 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { firebaseReady } from './src/lib/firebase';
 import { HealthDataProvider } from './src/lib/useHealthData';
-import HealthScreen from './src/screens/HealthScreen';
+import HealthTab from './src/screens/HealthTab';
 import LabsScreen from './src/screens/LabsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import TodayScreen from './src/screens/TodayScreen';
-import WeightScreen from './src/screens/WeightScreen';
 import WorkoutsScreen from './src/screens/WorkoutsScreen';
 import { colors, fonts, spacing } from './src/theme';
 
@@ -27,7 +26,6 @@ const TABS = [
   { key: 'today', label: 'Today', icon: '☀️' },
   { key: 'workouts', label: 'Workouts', icon: '🏃' },
   { key: 'health', label: 'Health', icon: '❤️' },
-  { key: 'weight', label: 'Weight', icon: '⚖️' },
   { key: 'labs', label: 'Labs', icon: '🧪' },
   { key: 'settings', label: 'Settings', icon: '⚙️' },
 ];
@@ -62,8 +60,7 @@ function Shell() {
       <View style={{ flex: 1 }}>
         {tab === 'today' ? <TodayScreen /> : null}
         {tab === 'workouts' ? <WorkoutsScreen /> : null}
-        {tab === 'health' ? <HealthScreen /> : null}
-        {tab === 'weight' ? <WeightScreen /> : null}
+        {tab === 'health' ? <HealthTab /> : null}
         {tab === 'labs' ? <LabsScreen /> : null}
         {tab === 'settings' ? <SettingsScreen /> : null}
       </View>
