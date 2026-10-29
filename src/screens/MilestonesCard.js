@@ -163,6 +163,10 @@ function MilestonesCard({ workouts, notes }) {
             saveMilestone(user.uid, chosen.ids, null);
             setOpen(null);
           }}
+          onRename={async (name) => {
+            await saveMilestone(user.uid, chosen.ids, name);
+            setOpen(name);
+          }}
           onClose={() => setOpen(null)}
         />
       ) : null}
@@ -184,7 +188,8 @@ function line(m) {
     .join(' · ');
 }
 
-function MilestoneSheet({ milestone, notes, onRemove, onClose }) {
+function MilestoneSheet({ milestone, notes, onRemove, onRename, onClose }) {
+  const [renaming, setRenaming] = useState(null);
   const [noting, setNoting] = useState(null);
   const [confirm, setConfirm] = useState(false);
   const withRoute = milestone.sessions.find((w) => w.metres > 0 && !w.indoor) ?? milestone.sessions[0];
@@ -193,7 +198,28 @@ function MilestoneSheet({ milestone, notes, onRemove, onClose }) {
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <SheetHeader onDone={onClose} />
         <ScrollView contentContainerStyle={styles.sheet}>
-          <Text style={styles.sheetTitle}>★ {milestone.name}</Text>
+          {renaming != null ? (
+            <View style={styles.naming}>
+              <TextInput
+                style={styles.nameInput}
+                value={renaming}
+                onChangeText={setRenaming}
+                autoFocus
+                onSubmitEditing={() => renaming.trim() && onRename(renaming.trim()).then(() => setRenaming(null))}
+              />
+              <Pressable
+                onPress={() => renaming.trim() && onRename(renaming.trim()).then(() => setRenaming(null))}
+                hitSlop={8}
+              >
+                <Text style={styles.action}>Save</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={() => setRenaming(milestone.name)}>
+              <Text style={styles.sheetTitle}>★ {milestone.name}</Text>
+              <Text style={styles.renameHint}>Tap the name to rename it{milestone.sessions.length > 1 ? ' — all its sessions change together' : ''}.</Text>
+            </Pressable>
+          )}
           <Text style={styles.sheetMeta}>{line(milestone)}</Text>
           {milestone.sessions.length === 1 ? <RouteMap workout={withRoute} /> : null}
           {milestone.sessions.map((w) => {
@@ -251,6 +277,7 @@ const styles = StyleSheet.create({
   nameInput: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius / 2, paddingHorizontal: spacing.sm, paddingVertical: 6, fontSize: fonts.body, color: colors.ink, backgroundColor: colors.card },
   sheet: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   sheetTitle: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
+  renameHint: { fontSize: fonts.tiny, color: colors.primary, marginBottom: spacing.xs },
   sheetMeta: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md },
   sessionRow: { flexDirection: 'row', alignItems: 'center' },
   remove: { fontSize: fonts.small, color: colors.danger, fontWeight: '700', textAlign: 'center', marginTop: spacing.lg },
