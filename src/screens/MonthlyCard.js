@@ -69,7 +69,7 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress, part 
             <Text style={[styles.cell, styles.headText]}>B/km</Text>
             <Text style={[styles.cell, styles.headText]}>Hours</Text>
           </View>
-          {withEventDividers(years, events, (y) => `${y.year}-12-31`).map((entry, i) =>
+          {withEventDividers(years.filter((y) => y.runKm > 0 || y.current), events, (y) => `${y.year}-12-31`).map((entry, i) =>
             entry.divider ? (
               <View key={`yev${i}`} style={styles.divider}>
                 <Text style={styles.dividerText}>

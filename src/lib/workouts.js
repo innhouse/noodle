@@ -544,7 +544,13 @@ export function formatPaceMin(perKm) {
 
 /** Totals per calendar year, newest first, same columns as the months. */
 export function yearlyTotals(workouts) {
-  const months = monthlyTotals(workouts, {}, 12 * 6);
+  // Every month back to the first session on record — imported Garmin history
+  // reaches 2009 — not just the last few years.
+  const earliest = (workouts ?? []).reduce((min, w) => (w.date && w.date < min ? w.date : min), dayKey());
+  const [ey, em] = earliest.split('-').map(Number);
+  const now = new Date();
+  const span = (now.getFullYear() - ey) * 12 + (now.getMonth() + 1 - em) + 1;
+  const months = monthlyTotals(workouts, {}, Math.max(12, span));
   const byYear = new Map();
   for (const m of months) {
     const year = m.month.slice(0, 4);
