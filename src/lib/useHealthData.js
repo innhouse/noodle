@@ -66,6 +66,8 @@ function useHealthDataSource() {
   const [denied, setDenied] = useState(false);
   const [capturedAt, setCapturedAt] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  // What the last full re-read did, for Settings to report.
+  const [rereadResult, setRereadResult] = useState(null);
 
   // The latest mirrored list, readable from inside the Health read.
   const workoutsRef = useRef(null);
@@ -114,9 +116,16 @@ function useHealthDataSource() {
     let running = false;
     let lastRead = 0;
     let lastSynced = null;
+    // A full re-read asked for while another read is running waits for it to
+    // finish rather than being dropped.
+    let fullQueued = false;
 
     const read = async (full = false) => {
-      if (running || (!full && Date.now() - lastRead < MIN_REREAD_MS)) return;
+      if (running) {
+        if (full) fullQueued = true;
+        return;
+      }
+      if (!full && Date.now() - lastRead < MIN_REREAD_MS) return;
       running = true;
       setRefreshing(true);
       try {
@@ -159,6 +168,17 @@ function useHealthDataSource() {
         setSeries(data);
         lastRead = Date.now();
 
+        if (full) {
+          const lacked = sessions.filter((w) => known.get(w.id) && known.get(w.id).avgHr == null);
+          setRereadResult({
+            sessions: sessions.length,
+            added: sessions.filter((w) => !known.get(w.id)).length,
+            lackedHr: lacked.length,
+            foundHr: lacked.filter((w) => w.avgHr != null).length,
+            at: new Date().toISOString(),
+          });
+        }
+
         const fingerprint = JSON.stringify([
           Object.entries(data).map(([key, points]) => [key, points.length, points.at(-1)?.value]),
           sessions.map((w) => [w.id, w.durationMin, w.avgHr, w.zoneMin]),
@@ -188,7 +208,12 @@ function useHealthDataSource() {
         }
       } finally {
         running = false;
-        if (!cancelled) setRefreshing(false);
+        if (fullQueued && !cancelled) {
+          fullQueued = false;
+          read(true);
+        } else if (!cancelled) {
+          setRefreshing(false);
+        }
       }
     };
     read();
@@ -224,6 +249,7 @@ function useHealthDataSource() {
     denied,
     capturedAt,
     rereadAll: () => rereadRef.current?.(),
+    rereadResult,
     canReread: healthSupported,
   };
 }
