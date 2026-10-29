@@ -7,7 +7,7 @@ import { colors, fonts, spacing } from '../theme';
  * (when there is one) and "Done" to close. It stays put while the list
  * scrolls, so the way out is always in the same place.
  */
-export default function SheetHeader({ backLabel, onBack, onDone }) {
+export default function SheetHeader({ backLabel, onBack, onDone, doneLabel = 'Done', doneDisabled = false }) {
   return (
     <View style={styles.bar}>
       {onBack ? (
@@ -19,8 +19,8 @@ export default function SheetHeader({ backLabel, onBack, onDone }) {
       ) : (
         <View style={styles.side} />
       )}
-      <Pressable onPress={onDone} hitSlop={12}>
-        <Text style={styles.done}>Done</Text>
+      <Pressable onPress={onDone} hitSlop={12} disabled={doneDisabled}>
+        <Text style={[styles.done, doneDisabled && { opacity: 0.4 }]}>{doneLabel}</Text>
       </Pressable>
     </View>
   );

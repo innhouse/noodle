@@ -28,7 +28,15 @@ export function formatDayLabel(key) {
 
   const [y, m, d] = key.split('-').map(Number);
   const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  // The year only when it isn't this one, so "Sun, Oct 13" from 2013 can't
+  // pass for this October.
+  const thisYear = y === new Date().getFullYear();
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    ...(thisYear ? {} : { year: 'numeric' }),
+  });
 }
 
 export function formatTime(iso) {

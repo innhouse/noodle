@@ -8,6 +8,7 @@ import { describeType, formatDuration, SYMPTOMS, WORKOUT_TYPES } from '../lib/wo
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Dropdown } from '../ui';
 import RouteMap from './RouteMap';
+import SheetHeader from './SheetHeader';
 
 /**
  * How a session felt, in one tap each.
@@ -61,6 +62,8 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <SheetHeader onBack={onClose} onDone={save} doneLabel={saving ? 'Saving…' : 'Save'} doneDisabled={saving} />
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>How did it feel?</Text>
         <Text style={styles.subtitle}>
@@ -113,6 +116,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
           it is happening right now, call 911.
         </Text>
       </ScrollView>
+      </View>
     </Modal>
   );
 }
