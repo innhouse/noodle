@@ -16,10 +16,12 @@ import { describeAge, formatHours, useHealthData } from '../lib/useHealthData';
 import { TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
+import SleepSheet from './SleepSheet';
 
 export default function HealthScreen() {
   const { series, loading, denied, capturedAt } = useHealthData();
   const [open, setOpen] = useState(null);
+  const [sleepOpen, setSleepOpen] = useState(false);
 
   if (loading) {
     return (
@@ -89,7 +91,8 @@ export default function HealthScreen() {
       ) : null}
 
       {lastNight ? (
-        <Card style={styles.heroCard}>
+        <Pressable onPress={() => setSleepOpen(true)}>
+          <Card style={styles.heroCard}>
           <Text style={styles.heroValue}>{formatHours(lastNight.value)}</Text>
           <Text style={styles.heroUnit}>asleep</Text>
           <Text style={styles.heroLabel}>Night of {formatDayLabel(lastNight.date)}</Text>
@@ -99,7 +102,9 @@ export default function HealthScreen() {
               {describeHours(sleepTrend.change)} against the three weeks before
             </Text>
           ) : null}
-        </Card>
+          <Text style={styles.historyLink}>Sleep history ›</Text>
+          </Card>
+        </Pressable>
       ) : null}
 
       {restingLatest ? (
@@ -140,13 +145,18 @@ export default function HealthScreen() {
                 open={open === 'sleep'}
                 onPress={() => setOpen(open === 'sleep' ? null : 'sleep')}
                 chart={
-                  <TimeChart
-                    points={sleep}
-                    band={usualRange(sleep)}
-                    outside="below"
-                    format={(v) => formatHours(v)}
-                    labels="ends"
-                  />
+                  <>
+                    <TimeChart
+                      points={sleep}
+                      band={usualRange(sleep)}
+                      outside="below"
+                      format={(v) => formatHours(v)}
+                      labels="ends"
+                    />
+                    <Pressable onPress={() => setSleepOpen(true)} hitSlop={8}>
+                      <Text style={styles.historyLink}>Full history ›</Text>
+                    </Pressable>
+                  </>
                 }
               />
             ) : null}
@@ -192,6 +202,7 @@ export default function HealthScreen() {
         between people, and this is not a medical device. Anything that worries you is a
         conversation with your doctor, not with this app.
       </Text>
+      {sleepOpen ? <SleepSheet onClose={() => setSleepOpen(false)} /> : null}
     </ScrollView>
   );
 }
@@ -290,6 +301,7 @@ function pillTone(change, key) {
 }
 
 const styles = StyleSheet.create({
+  historyLink: { fontSize: fonts.small, color: colors.primary, fontWeight: '700', marginTop: spacing.sm, textAlign: 'center' },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   loadingText: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.md },

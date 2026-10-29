@@ -8,6 +8,7 @@
  *   users/{uid}/workoutNotes/{uuid}   how a session felt, written by the user
  *   users/{uid}/labs/{YYYY-MM-DD}     one blood test, typed in from the report
  *   users/{uid}/health/snapshot       daily series mirrored from Apple Health
+ *   users/{uid}/sleep/{YYYY-MM-DD}    one night's sleep, mirrored from Apple Health
  *
  * Apple Health stays the source of truth for everything mirrored here. The copies
  * exist so the web app can show the same numbers, and they are stamped with when
@@ -71,6 +72,35 @@ export async function saveWeights(uid, entries, source = 'health') {
     const batch = writeBatch(db);
     for (const { date, weightKg } of entries.slice(i, i + 400)) {
       batch.set(doc(db, 'users', uid, 'weights', date), { date, weightKg, source });
+    }
+    await batch.commit();
+  }
+}
+
+// --- Sleep history ---------------------------------------------------------
+
+export function watchSleepNights(uid, callback) {
+  const q = query(collection(db, 'users', uid, 'sleep'), orderBy('date', 'asc'));
+  return onSnapshot(
+    q,
+    (snapshot) => callback(snapshot.docs.map((d) => d.data())),
+    (error) => console.warn('sleep watch failed', error)
+  );
+}
+
+/** One document per night, keyed by the morning it ended; hours to 2 decimals. */
+export async function saveSleepNights(uid, nights) {
+  const r = (h) => Math.round((h ?? 0) * 100) / 100;
+  for (let i = 0; i < nights.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const n of nights.slice(i, i + 400)) {
+      batch.set(doc(db, 'users', uid, 'sleep', n.date), {
+        date: n.date,
+        hours: r(n.value),
+        deep: r(n.stages?.deep),
+        rem: r(n.stages?.rem),
+        core: r(n.stages?.core),
+      });
     }
     await batch.commit();
   }

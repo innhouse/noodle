@@ -23,6 +23,7 @@ import {
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
 import KpiCard from './KpiCard';
+import SleepSheet from './SleepSheet';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
@@ -41,6 +42,7 @@ export default function TodayScreen() {
   const workouts = useMemo(() => applyNotes(recorded, notes), [recorded, notes]);
   const [weights, setWeights] = useState([]);
   const [noting, setNoting] = useState(null);
+  const [sleepOpen, setSleepOpen] = useState(false);
   const today = dayKey();
 
   useEffect(() => {
@@ -145,7 +147,8 @@ export default function TodayScreen() {
 
       <Text style={styles.sectionHeading}>Last night</Text>
       {nightIsRecent ? (
-        <Card style={styles.heroCard}>
+        <Pressable onPress={() => setSleepOpen(true)}>
+          <Card style={styles.heroCard}>
           <Text style={styles.heroValue}>{formatHours(lastNight.value)}</Text>
           <Text style={styles.heroUnit}>asleep</Text>
           {lastNight.stages && lastNight.stages.deep + lastNight.stages.rem > 0 ? (
@@ -159,7 +162,9 @@ export default function TodayScreen() {
             format={(h) => `${Math.round(Math.abs(h) * 60)} min`}
             threshold={0.25}
           />
-        </Card>
+          <Text style={styles.historyLink}>Sleep history ›</Text>
+          </Card>
+        </Pressable>
       ) : (
         <Card>
           <Text style={styles.restTitle}>No sleep recorded</Text>
@@ -194,6 +199,8 @@ export default function TodayScreen() {
         these numbers, and Noodle does not know which is which. Anything that worries you is a
         conversation with your doctor.
       </Text>
+
+      {sleepOpen ? <SleepSheet onClose={() => setSleepOpen(false)} /> : null}
 
       {noting ? (
         <WorkoutNoteSheet workout={noting} note={notes[noting.id]} onClose={() => setNoting(null)} />
@@ -336,6 +343,7 @@ function WeekCard({ workouts, today, notes, onPick }) {
 }
 
 const styles = StyleSheet.create({
+  historyLink: { fontSize: fonts.small, color: colors.primary, fontWeight: '700', marginTop: spacing.sm },
   weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: spacing.xs },
   weekTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
   weekTotals: { fontSize: fonts.tiny, color: colors.inkSoft },

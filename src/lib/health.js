@@ -36,3 +36,7 @@ export async function activeEnergyForDay() {
 export async function healthSeries() {
   return {};
 }
+
+export async function sleepNightsSince() {
+  return [];
+}

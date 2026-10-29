@@ -402,10 +402,15 @@ async function dailySeries(metric, days) {
  * including them would turn a broken night into a long one.
  */
 async function sleepSeries(days) {
+  return sleepNightsSince(windowStart(days));
+}
+
+/** Every night from `since` on, same shape as the daily sleep series. */
+export async function sleepNightsSince(since) {
   const samples = await queryCategorySamples(SLEEP_ANALYSIS, {
     limit: 0,
     ascending: true,
-    filter: { date: { startDate: windowStart(days), endDate: new Date() } },
+    filter: { date: { startDate: since, endDate: new Date() } },
   });
 
   const byNight = new Map();
