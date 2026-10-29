@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { healthSupported } from '../lib/health';
 import { deleteMealData, hasMealData } from '../lib/store';
+import { useHealthData } from '../lib/useHealthData';
 import {
   cmToFeetInches,
   displayLb,
@@ -28,6 +29,8 @@ export default function SettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [cleanup, setCleanup] = useState(null);
   const [leftovers, setLeftovers] = useState(false);
+  const { rereadAll, canReread, refreshing } = useHealthData();
+  const [rereadAsked, setRereadAsked] = useState(false);
 
   useEffect(() => {
     const height = cmToFeetInches(profile?.heightCm);
@@ -287,6 +290,21 @@ export default function SettingsScreen() {
           <Text style={styles.cardBody}>
             Workouts, sleep and heart readings are read every time Noodle opens and copied to
             your account so the web app can show them. Noodle never writes to Health.
+          </Text>
+          <Button
+            title={refreshing && rereadAsked ? 'Reading full history…' : 'Re-read full workout history'}
+            variant="secondary"
+            loading={refreshing && rereadAsked}
+            disabled={!canReread}
+            onPress={() => {
+              setRereadAsked(true);
+              rereadAll();
+            }}
+          />
+          <Text style={[styles.cardBody, { marginTop: spacing.xs }]}>
+            Noodle normally checks only for sessions newer than its latest. Use this after importing
+            older workouts into Health — from Garmin or Nike through RunGap, say — so they are picked
+            up. Sessions recorded twice show once.
           </Text>
           <Dropdown
             label="Weigh-ins"
