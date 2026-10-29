@@ -173,6 +173,21 @@ export function watchWorkoutNotes(uid, callback) {
   );
 }
 
+/** Name (or, with null, un-name) a session as a milestone, leaving the rest of its note alone. */
+export async function saveMilestone(uid, workoutIds, name) {
+  for (let i = 0; i < workoutIds.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const workoutId of workoutIds.slice(i, i + 400)) {
+      batch.set(
+        doc(db, 'users', uid, 'workoutNotes', workoutId),
+        { workoutId, milestone: name || null, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+    }
+    await batch.commit();
+  }
+}
+
 export function saveWorkoutNote(uid, workoutId, note) {
   return setDoc(doc(db, 'users', uid, 'workoutNotes', workoutId), {
     ...note,
