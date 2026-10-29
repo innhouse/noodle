@@ -24,7 +24,9 @@ export default function RouteMap({ workout, height = 220 }) {
   const [width, setWidth] = useState(0);
 
   if (!route || !route.points || route.points.length < 2) {
-    return route?.loading ? <Text style={styles.note}>Looking for a route…</Text> : null;
+    if (route?.loading) return <Text style={styles.note}>Looking for a route…</Text>;
+    const why = noRouteReason(workout, route);
+    return why ? <Text style={styles.note}>{why}</Text> : null;
   }
 
   return (
@@ -35,6 +37,16 @@ export default function RouteMap({ workout, height = 220 }) {
       <Text style={styles.credit}>© OpenStreetMap contributors</Text>
     </View>
   );
+}
+
+/** A line saying why a session has no map, once that is known. */
+function noRouteReason(workout, route) {
+  if (!workout) return null;
+  if (workout.indoor) return 'Indoor session: no route.';
+  if (workout.imported) return route === null ? 'Imported session: no route on file.' : null;
+  if (!(workout.metres > 0)) return null;
+  if (route?.points) return 'No route recorded for this session.';
+  return null;
 }
 
 /** undefined/null while unknown; { loading }; or { points }. */
@@ -79,7 +91,8 @@ function useRoute(workout) {
   if (stored?.points?.length) return stored;
   if (local) return { points: local };
   if (stored) return stored;
-  return eligible ? { loading: true } : null;
+  // undefined until the account answers, null once it says there is none.
+  return eligible ? { loading: true } : stored;
 }
 
 // Web Mercator, in pixels at zoom z.
