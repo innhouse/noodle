@@ -233,7 +233,8 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
           <View style={[styles.row, styles.head]}>
             <Text style={[styles.cell, styles.month, styles.headText]}>Activity</Text>
             <Text style={[styles.cell, styles.headText]}>Sessions</Text>
-            <Text style={[styles.cell, styles.headText]}>Total</Text>
+            <Text style={[styles.cell, styles.headText]}>Km</Text>
+            <Text style={[styles.cell, styles.headText]}>Time</Text>
             <Text style={[styles.cell, styles.headText]}>Avg</Text>
           </View>
           {activities.map((a) => (
@@ -246,7 +247,8 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
                 {a.icon} {a.label}
               </Text>
               <Text style={styles.cell}>{a.sessions}</Text>
-              <Text style={styles.cell}>{formatDuration(a.minutes)}</Text>
+              <Text style={styles.cell}>{a.metres >= 500 ? Math.round(a.metres / 1000).toLocaleString() : '—'}</Text>
+              <Text style={styles.cell}>{formatHours(a.minutes)}</Text>
               <Text style={styles.cell}>{formatDuration(a.avgMin)}</Text>
             </Pressable>
           ))}
@@ -259,6 +261,11 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
       ) : null}
     </Card>
   );
+}
+
+/** Whole hours for long totals ("177 h"), minutes under an hour. */
+function formatHours(minutes) {
+  return minutes >= 60 ? `${Math.round(minutes / 60).toLocaleString()} h` : `${Math.round(minutes)} min`;
 }
 
 function SummaryRow({ label, note, cells }) {

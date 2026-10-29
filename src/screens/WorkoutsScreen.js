@@ -115,9 +115,6 @@ export default function WorkoutsScreen() {
       ) : null}
 
       {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
-      {workouts.length ? (
-        <StreakCard workouts={workouts} minKm={profile?.streakKm ?? 10} onPick={setNoting} />
-      ) : null}
 
       {workouts.length ? (
         <Card>
@@ -202,6 +199,10 @@ export default function WorkoutsScreen() {
           events={profile?.events}
           onMonthPress={setMonth}
         /> : null}
+
+      {workouts.length ? (
+        <StreakCard workouts={workouts} minKm={profile?.streakKm ?? 10} onPick={setNoting} />
+      ) : null}
 
       {weeks.slice(0, weeksShown).map((week) => (
         <View key={week.week}>

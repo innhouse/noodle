@@ -636,9 +636,10 @@ export function byActivity(workouts, days = 365) {
   const totals = new Map();
   for (const w of workouts ?? []) {
     if (w.date < from) continue;
-    const t = totals.get(w.type) ?? { type: w.type, sessions: 0, minutes: 0 };
+    const t = totals.get(w.type) ?? { type: w.type, sessions: 0, minutes: 0, metres: 0 };
     t.sessions += 1;
     t.minutes += w.durationMin ?? 0;
+    t.metres += w.metres ?? 0;
     totals.set(w.type, t);
   }
   return [...totals.values()]
