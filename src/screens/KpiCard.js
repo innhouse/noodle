@@ -45,7 +45,7 @@ function KpiCard({ workouts, kpis, history = 8, compact = false }) {
               >
                 {current.counts[k]}
               </Text>
-              <Text style={styles.cellGoal} numberOfLines={1}>
+              <Text style={styles.cellGoal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 of {goals[k]}
                 {MINUTES.has(k) ? ' min' : ''}
               </Text>
