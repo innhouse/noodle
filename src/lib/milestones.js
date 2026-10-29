@@ -10,6 +10,9 @@
 const HALF_KM = 21.0975;
 const HIKE = 24;
 const RUN = 37;
+const RIDE = 13;
+// A ride this long is an event, not a commute.
+const LONG_RIDE_M = 70_000;
 
 /** Named milestones, newest first, each with its sessions and totals. */
 export function milestonesFrom(workouts) {
@@ -43,7 +46,9 @@ function summarise(name, sessions) {
  * Likely milestones not yet named or dismissed:
  *  - runs of a half marathon or longer, named by the distance (or the name the
  *    source app gave them, such as a Garmin race name);
- *  - three or more days in a row of long hikes — a trek or a climb.
+ *  - three or more days in a row of long hikes — a trek or a climb;
+ *  - rides of 70 km or more, with long rides on consecutive days grouped as
+ *    one — a two-day charity ride is one event.
  */
 export function suggestMilestones(workouts, dismissed = []) {
   const skip = new Set(dismissed);
@@ -79,6 +84,25 @@ export function suggestMilestones(workouts, dismissed = []) {
     run.push(w);
   }
   flush();
+
+  const rides = free
+    .filter((w) => w.type === RIDE && w.metres >= LONG_RIDE_M)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  let group = [];
+  const flushRides = () => {
+    if (!group.length) return;
+    const named = group.find((w) => w.name);
+    const days = new Set(group.map((w) => w.date)).size;
+    const year = group[0].date.slice(0, 4);
+    out.push(summarise(named ? named.name : days > 1 ? `${days}-day ride, ${year}` : `Long ride, ${year}`, group));
+    group = [];
+  };
+  for (const w of rides) {
+    const last = group[group.length - 1];
+    if (last && dayGap(last.date, w.date) > 1) flushRides();
+    group.push(w);
+  }
+  flushRides();
 
   return out
     .map((m) => ({ ...m, key: m.ids[0] }))
