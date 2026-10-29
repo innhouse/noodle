@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { dayKey, formatDayLabel } from '../lib/dates';
@@ -29,6 +29,11 @@ import { Button, Card, Empty, Field, Pill } from '../ui';
 export default function LabsScreen() {
   const { user } = useAuth();
   const [tests, setTests] = useState([]);
+  // False until the account has answered, so a slow connection shows
+  // "Loading" rather than "No results yet".
+  const [loaded, setLoaded] = useState(false);
+  // The test whose Remove was tapped once; a second tap deletes it.
+  const [removing, setRemoving] = useState(null);
   const [mode, setMode] = useState(null); // null | 'entry' | 'paste'
   const [pasted, setPasted] = useState('');
   const [pasteResult, setPasteResult] = useState(null);
@@ -38,7 +43,10 @@ export default function LabsScreen() {
 
   useEffect(() => {
     if (!user) return undefined;
-    return watchLabs(user.uid, setTests);
+    return watchLabs(user.uid, (list) => {
+      setTests(list);
+      setLoaded(true);
+    });
   }, [user]);
 
   const markers = useMemo(() => markersWithData(tests), [tests]);
@@ -184,7 +192,14 @@ export default function LabsScreen() {
         <Text style={styles.pasteLink}>Paste results as JSON</Text>
       </Pressable>
 
-      {!tests.length ? (
+      {!loaded ? (
+        <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.loadingNote}>Loading your results…</Text>
+        </View>
+      ) : null}
+
+      {loaded && !tests.length ? (
         <Empty
           title="No results yet"
           body="Enter the numbers from a lab report and they will show here against the lab’s normal range, with a chart once there is more than one."
@@ -295,8 +310,18 @@ export default function LabsScreen() {
                     .map((m) => `${m.label.split(' ')[0]} ${formatLab(test.values[m.key], m)}`)
                     .join(' · ')}
                 </Text>
-                <Pressable onPress={() => deleteLabs(user.uid, test.date)} hitSlop={10}>
-                  <Text style={styles.delete}>Remove</Text>
+                <Pressable
+                  onPress={() => {
+                    if (removing === test.date) {
+                      setRemoving(null);
+                      deleteLabs(user.uid, test.date);
+                    } else {
+                      setRemoving(test.date);
+                    }
+                  }}
+                  hitSlop={10}
+                >
+                  <Text style={styles.delete}>{removing === test.date ? 'Tap again to remove' : 'Remove'}</Text>
                 </Pressable>
               </Card>
             </Pressable>
@@ -324,6 +349,7 @@ function longDate(key) {
 }
 
 const styles = StyleSheet.create({
+  loadingNote: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.sm },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md },
