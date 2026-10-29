@@ -21,6 +21,17 @@ import { Button, Card } from '../ui';
 export default function MonthSheet({ month, workouts, notes, onPick, onClose }) {
   const [type, setType] = useState(null);
   if (!month) return null;
+  if (month.startsWith('activity:')) {
+    return (
+      <ActivityHistory
+        type={Number(month.slice('activity:'.length))}
+        workouts={workouts}
+        notes={notes}
+        onPick={onPick}
+        onClose={onClose}
+      />
+    );
+  }
 
   // A month ("2026-10") or a whole year ("2025") — sessions match by prefix.
   const [y, m] = month.split('-').map(Number);
@@ -77,6 +88,79 @@ export default function MonthSheet({ month, workouts, notes, onPick, onClose }) 
               </Pressable>
             ))}
             {groups.length ? <Text style={styles.hint}>Tap an activity to see its sessions.</Text> : null}
+          </>
+        )}
+
+        <Button title="Close" variant="ghost" onPress={onClose} />
+      </ScrollView>
+    </Modal>
+  );
+}
+
+/**
+ * One activity across the years: a row per year, newest first; tapping a year
+ * lists that year's sessions.
+ */
+function ActivityHistory({ type, workouts, notes, onPick, onClose }) {
+  const [year, setYear] = useState(null);
+  const { icon, label } = describeType(type);
+  const sessions = (workouts ?? [])
+    .filter((w) => w.type === type)
+    .sort((a, b) => b.start.localeCompare(a.start));
+
+  const byYear = new Map();
+  for (const w of sessions) {
+    const key = w.date.slice(0, 4);
+    if (!byYear.has(key)) byYear.set(key, []);
+    byYear.get(key).push(w);
+  }
+  const years = [...byYear.entries()].map(([key, list]) => ({ key, ...summarise(list)[0] }));
+  const all = summarise(sessions)[0];
+  const chosen = year == null ? null : years.find((y) => y.key === year);
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
+      <ScrollView contentContainerStyle={styles.container}>
+        {chosen ? (
+          <>
+            <Pressable onPress={() => setYear(null)} hitSlop={10}>
+              <Text style={styles.back}>‹ {label}, all years</Text>
+            </Pressable>
+            <Text style={styles.title}>
+              {icon} {label} · {chosen.key}
+            </Text>
+            <Text style={styles.subtitle}>{groupLine(chosen)}</Text>
+            {chosen.sessions.map((workout) => (
+              <SessionRow
+                key={workout.id}
+                workout={workout}
+                note={notes?.[workout.id]}
+                onPress={() => onPick(workout)}
+              />
+            ))}
+          </>
+        ) : (
+          <>
+            <Text style={styles.title}>
+              {icon} {label}
+            </Text>
+            <Text style={styles.subtitle}>
+              {all ? `All time: ${groupLine(all)}` : 'No sessions recorded.'}
+            </Text>
+            {years.map((y) => (
+              <Pressable key={y.key} onPress={() => setYear(y.key)}>
+                <Card style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{y.key}</Text>
+                    <Text style={styles.rowDetails}>
+                      {groupLine(y)} · {formatDuration(Math.round(y.minutes / y.sessions.length))} avg
+                    </Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </Card>
+              </Pressable>
+            ))}
+            {years.length ? <Text style={styles.hint}>Tap a year to see its sessions.</Text> : null}
           </>
         )}
 
