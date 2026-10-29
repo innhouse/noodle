@@ -84,7 +84,7 @@ export default function WorkoutsScreen() {
       <Text style={styles.title}>Workouts</Text>
       <Text style={styles.subtitle}>
         {workouts.length
-          ? `${workouts.length} session${workouts.length === 1 ? '' : 's'} in the last year`
+          ? `${workouts.length} session${workouts.length === 1 ? '' : 's'} since ${workouts[workouts.length - 1].date.slice(0, 4)}`
           : 'From Apple Health'}
       </Text>
 
