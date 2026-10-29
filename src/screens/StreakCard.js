@@ -12,7 +12,7 @@ import { Card } from '../ui';
  * from a past year stays on the record even after it ends.
  */
 function StreakCard({ workouts, minKm = 10, onPick }) {
-  const { current, longest, qualifyingDays } = useMemo(() => runStreaks(workouts, minKm), [workouts, minKm]);
+  const { current, longest, qualifyingDays, byYear } = useMemo(() => runStreaks(workouts, minKm), [workouts, minKm]);
   const records = useMemo(() => runRecords(workouts, minKm), [workouts, minKm]);
   if (!qualifyingDays) return null;
 
@@ -44,6 +44,21 @@ function StreakCard({ workouts, minKm = 10, onPick }) {
               <Text style={styles.dates}>
                 {longDate(s.start)} – {longDate(s.end)}
                 {current && s.start === current.start ? '  · now' : ''}
+              </Text>
+            </View>
+          ))}
+        </>
+      ) : null}
+      {byYear.length > 1 ? (
+        <>
+          <Text style={[styles.sub, { marginTop: spacing.lg }]}>Best streak each year</Text>
+          {byYear.map((y) => (
+            <View key={y.year} style={styles.row}>
+              <Text style={styles.days}>{y.year}</Text>
+              <Text style={styles.dates}>
+                {y.best.days} day{y.best.days === 1 ? '' : 's'}
+                {y.best.days > 1 ? ` · ${longDate(y.best.start)} – ${longDate(y.best.end)}` : ` · ${longDate(y.best.start)}`}
+                {` · ${y.qualifyingDays} ${minKm} km day${y.qualifyingDays === 1 ? '' : 's'}`}
               </Text>
             </View>
           ))}
