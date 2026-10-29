@@ -171,6 +171,8 @@ function clean(w) {
     indoor: Boolean(w.indoor),
     source: typeof w.source === 'string' ? w.source.slice(0, 40) : 'Imported',
     imported: true,
+    // The name the source app gave it — a Garmin race name, say.
+    name: typeof w.name === 'string' && w.name.trim() ? w.name.trim().slice(0, 60) : null,
   };
 }
 

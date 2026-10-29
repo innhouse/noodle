@@ -269,8 +269,10 @@ export const FOOT_TYPES = [
 export function applyNotes(workouts, notes) {
   if (!notes) return workouts ?? [];
   return (workouts ?? []).map((w) => {
-    const override = notes[w.id]?.typeOverride;
-    return override ? { ...w, type: override, originalType: w.type } : w;
+    const note = notes[w.id];
+    const override = note?.typeOverride;
+    const named = note?.milestone ? { ...w, milestone: note.milestone } : w;
+    return override ? { ...named, type: override, originalType: w.type } : named;
   });
 }
 

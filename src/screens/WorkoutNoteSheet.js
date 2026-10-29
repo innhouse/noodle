@@ -22,6 +22,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
   const [symptoms, setSymptoms] = useState([]);
   const [text, setText] = useState('');
   const [typeOverride, setTypeOverride] = useState(null);
+  const [milestone, setMilestone] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
     setSymptoms(note?.symptoms ?? []);
     setText(note?.text ?? '');
     setTypeOverride(note?.typeOverride ?? null);
+    setMilestone(note?.milestone ?? '');
   }, [note, workout?.id]);
 
   if (!workout) return null;
@@ -53,6 +55,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
         symptoms,
         text: text.trim(),
         typeOverride: typeOverride && typeOverride !== recordedType ? typeOverride : null,
+        milestone: milestone.trim() || null,
       });
       onClose();
     } finally {
@@ -107,6 +110,18 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
           multiline
         />
 
+        <Text style={styles.label}>Milestone</Text>
+        <TextInput
+          style={[styles.input, styles.milestoneInput]}
+          placeholder="Name it to keep it on Today — e.g. Victoria Marathon"
+          placeholderTextColor={colors.inkSoft}
+          value={milestone}
+          onChangeText={setMilestone}
+        />
+        <Text style={styles.milestoneHint}>
+          Sessions with the same name show as one milestone, so a multi-day trip can share one.
+        </Text>
+
         <Button title="Save" onPress={save} loading={saving} />
         <Button title="Cancel" variant="ghost" onPress={onClose} />
 
@@ -122,6 +137,8 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
 }
 
 const styles = StyleSheet.create({
+  milestoneInput: { minHeight: 0, marginBottom: spacing.xs },
+  milestoneHint: { fontSize: fonts.tiny, color: colors.inkSoft, marginBottom: spacing.lg },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2, backgroundColor: colors.bg, flexGrow: 1 },
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },
   subtitle: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.lg, lineHeight: 20 },

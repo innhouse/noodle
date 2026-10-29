@@ -23,6 +23,7 @@ import {
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
 import KpiCard from './KpiCard';
+import MilestonesCard from './MilestonesCard';
 import SleepSheet from './SleepSheet';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
 
@@ -144,6 +145,7 @@ export default function TodayScreen() {
       {workouts.length ? (
         <WeekCard workouts={workouts} today={today} notes={notes} onPick={setNoting} />
       ) : null}
+      {workouts.length ? <MilestonesCard workouts={workouts} notes={notes} /> : null}
 
       <Text style={styles.sectionHeading}>Last night</Text>
       {nightIsRecent ? (
