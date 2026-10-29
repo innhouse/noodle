@@ -15,6 +15,7 @@ import {
 } from '../lib/units';
 import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Dropdown, Field } from '../ui';
+import ImportCard from './ImportCard';
 
 const SYNC_WEIGHT_OPTIONS = [
   { value: true, label: 'Import from Apple Health automatically' },
@@ -317,6 +318,9 @@ export default function SettingsScreen() {
       ) : null}
 
       <Button title={saved ? 'Saved' : 'Save'} onPress={save} />
+
+      <View style={{ height: spacing.lg }} />
+      <ImportCard />
 
       {leftovers || cleanup?.done ? (
       <Card style={styles.cleanupCard}>
