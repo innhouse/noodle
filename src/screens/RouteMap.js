@@ -41,39 +41,45 @@ export default function RouteMap({ workout, height = 220 }) {
 function useRoute(workout) {
   const { user } = useAuth();
   const [stored, setStored] = useState(undefined);
-  const [loading, setLoading] = useState(false);
+  // What Health said on this phone, drawn at once without waiting for the
+  // account — on a slow connection that round trip alone takes seconds.
+  const [local, setLocal] = useState(undefined);
   const id = workout?.id;
+  const eligible =
+    healthSupported && workout && !workout.imported && !workout.indoor && workout.metres > 0;
 
   useEffect(() => {
     if (!user || !id) return undefined;
     return watchRoute(user.uid, id, setStored);
   }, [user, id]);
 
-  // Nothing stored yet: on the phone, ask Health once and keep what it says —
-  // including "no route", so an indoor session isn't asked about again.
-  const canAsk =
-    stored === null && healthSupported && workout && !workout.imported && !workout.indoor && workout.metres > 0;
   useEffect(() => {
-    if (!canAsk) return undefined;
+    if (!eligible || !id) return undefined;
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
     (async () => {
       if (!(await requestHealthAccess())) return;
       const points = await workoutRoute(id);
-      if (points && !cancelled) await saveRoute(user.uid, id, points);
-    })()
-      .catch((error) => console.warn('route read failed', error))
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      if (!cancelled) setLocal(points ?? []);
+    })().catch((error) => {
+      console.warn('route read failed', error);
+      if (!cancelled) setLocal([]);
+    });
     return () => {
       cancelled = true;
     };
-  }, [canAsk, id, user]);
+  }, [eligible, id]);
 
+  // Keep it in the account for the web, once the account has said it has none.
+  useEffect(() => {
+    if (stored === null && local && user && id) {
+      saveRoute(user.uid, id, local).catch((error) => console.warn('route save failed', error));
+    }
+  }, [stored, local, user, id]);
+
+  if (stored?.points?.length) return stored;
+  if (local) return { points: local };
   if (stored) return stored;
-  return loading ? { loading: true } : null;
+  return eligible ? { loading: true } : null;
 }
 
 // Web Mercator, in pixels at zoom z.
