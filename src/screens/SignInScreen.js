@@ -57,7 +57,7 @@ export default function SignInScreen() {
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Text style={styles.logo}>Noodle</Text>
-        <Text style={styles.tagline}>Photograph your food. Know what you ate.</Text>
+        <Text style={styles.tagline}>Training, sleep and heart, measured against your own history.</Text>
 
         <Card>
           <Field
