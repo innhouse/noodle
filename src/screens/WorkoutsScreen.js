@@ -37,7 +37,8 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  */
 const WEEKS_PAGE = 8;
 
-export default function WorkoutsScreen() {
+export default function WorkoutsScreen({ mode = 'training' }) {
+  const running = mode === 'running';
   const { user, profile } = useAuth();
   const { series, workouts: recorded, loading, refreshing, denied, capturedAt } = useHealthData();
   const [notes, setNotes] = useState({});
@@ -49,7 +50,8 @@ export default function WorkoutsScreen() {
   // list of cards was enough to run the phone out of memory.
   const [weeksShown, setWeeksShown] = useState(WEEKS_PAGE);
 
-  const weeks = useMemo(() => groupByWeek(workouts), [workouts]);
+  const listed = useMemo(() => (running ? workouts.filter((w) => w.type === 37) : workouts), [workouts, running]);
+  const weeks = useMemo(() => groupByWeek(listed), [listed]);
   const derived = useMemo(() => {
     const hasRuns = workouts.some((w) => ON_FOOT.runs.includes(w.type) && beatsPerKm(w));
     const hasWalks = workouts.some((w) => ON_FOOT.walks.includes(w.type) && beatsPerKm(w));
@@ -81,10 +83,10 @@ export default function WorkoutsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Workouts</Text>
+      <Text style={styles.title}>{running ? 'Running' : 'Training'}</Text>
       <Text style={styles.subtitle}>
-        {workouts.length
-          ? `${workouts.length} session${workouts.length === 1 ? '' : 's'} since ${workouts[workouts.length - 1].date.slice(0, 4)}`
+        {listed.length
+          ? `${listed.length} ${running ? 'run' : 'session'}${listed.length === 1 ? '' : 's'} since ${listed[listed.length - 1].date.slice(0, 4)}`
           : 'From Apple Health'}
       </Text>
 
@@ -114,9 +116,9 @@ export default function WorkoutsScreen() {
         />
       ) : null}
 
-      {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
+      {!running && workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
 
-      {workouts.length ? (
+      {!running && workouts.length ? (
         <Card>
           <View style={styles.targetRow}>
             <Text style={styles.targetLabel}>This week</Text>
@@ -142,7 +144,7 @@ export default function WorkoutsScreen() {
         </Card>
       ) : null}
 
-      {efficiencyAny.sessions.length >= 2 ? (
+      {running && efficiencyAny.sessions.length >= 2 ? (
         <Card>
           <Text style={styles.effTitle}>Heartbeats per kilometre</Text>
           <Text style={styles.effBody}>
@@ -198,9 +200,10 @@ export default function WorkoutsScreen() {
           targets={profile?.monthly}
           events={profile?.events}
           onMonthPress={setMonth}
+          part={mode}
         /> : null}
 
-      {workouts.length ? (
+      {running && workouts.length ? (
         <StreakCard workouts={workouts} minKm={profile?.streakKm ?? 10} onPick={setNoting} />
       ) : null}
 
