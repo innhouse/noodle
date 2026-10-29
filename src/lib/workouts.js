@@ -725,6 +725,30 @@ export function runStreaks(workouts, minKm = 10, top = 5) {
   };
 }
 
+/**
+ * Average running pace for each month with runs, all years, oldest first:
+ * total minutes over total km (so a long run counts for more than a short
+ * one), from runs of 1 km or more at a plausible pace.
+ */
+export function paceByMonth(workouts) {
+  const months = new Map();
+  for (const w of workouts ?? []) {
+    if (w.type !== 37 || !(w.metres >= 1000) || !(w.durationMin > 0)) continue;
+    const km = w.metres / 1000;
+    const pace = w.durationMin / km;
+    if (pace < MIN_RUN_PACE || pace > MAX_RUN_PACE) continue;
+    const key = w.date.slice(0, 7);
+    const m = months.get(key) ?? { minutes: 0, km: 0, runs: 0 };
+    m.minutes += w.durationMin;
+    m.km += km;
+    m.runs += 1;
+    months.set(key, m);
+  }
+  return [...months.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, m]) => ({ date: `${month}-15`, month, value: m.minutes / m.km, runs: m.runs, km: m.km }));
+}
+
 const HALF_KM = 21.0975;
 // Minutes per km outside which a "run" is a recording error, not a run.
 const MIN_RUN_PACE = 3;
