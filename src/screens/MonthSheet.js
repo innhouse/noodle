@@ -176,13 +176,20 @@ function summarise(sessions) {
   const byType = new Map();
   for (const w of sessions) {
     const group = activityGroup(w.type);
-    const g = byType.get(group) ?? { type: group, ...describeType(group), sessions: [], minutes: 0, metres: 0, beats: 0, hrMinutes: 0 };
+    const g = byType.get(group) ?? { type: group, ...describeType(group), sessions: [], minutes: 0, metres: 0, beats: 0, hrMinutes: 0, bpkBeats: 0, bpkKm: 0 };
     g.sessions.push(w);
     g.minutes += w.durationMin ?? 0;
     g.metres += w.metres ?? 0;
     if (w.avgHr && w.durationMin) {
       g.beats += w.avgHr * w.durationMin;
       g.hrMinutes += w.durationMin;
+    }
+    // Beats per km across the group: all the beats over all the km, from the
+    // sessions that have both, so a long run counts for more than a short one.
+    const bpk = beatsPerKm(w);
+    if (bpk) {
+      g.bpkBeats += bpk * (w.metres / 1000);
+      g.bpkKm += w.metres / 1000;
     }
     byType.set(group, g);
   }
@@ -200,6 +207,7 @@ function groupLine(group) {
       ? `${formatPaceMin(group.minutes / (group.metres / 1000))} /km`
       : null,
     group.hrMinutes ? `${Math.round(group.beats / group.hrMinutes)} bpm avg` : null,
+    group.bpkKm ? `${Math.round(group.bpkBeats / group.bpkKm)} beats/km` : null,
   ];
   return parts.filter(Boolean).join(' · ');
 }
