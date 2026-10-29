@@ -176,6 +176,7 @@ function useHealthDataSource() {
             !before ||
             before.zoneMin !== w.zoneMin ||
             before.avgHr !== w.avgHr ||
+            before.hrChecked !== w.hrChecked ||
             before.durationMin !== w.durationMin ||
             before.metres !== w.metres
           );
