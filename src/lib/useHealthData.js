@@ -16,11 +16,12 @@
  * Off the phone: HealthKit does not exist, so read the mirrored copy and say how
  * old it is.
  */
-import { createContext, createElement, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, createElement, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
 import { healthSeries, healthSupported, requestHealthAccess, workoutsSince } from './health';
+import { dropOverlaps } from './workouts';
 import {
   saveHealthSnapshot,
   saveWorkouts,
@@ -68,6 +69,8 @@ function useHealthDataSource() {
 
   // The latest mirrored list, readable from inside the Health read.
   const workoutsRef = useRef(null);
+  // Starts a full-history read; set by the read effect on the phone.
+  const rereadRef = useRef(null);
   // Set once this phone's own Health read has landed; from then on the mirrored
   // snapshot no longer overwrites what is on screen.
   const freshRef = useRef(false);
@@ -112,8 +115,8 @@ function useHealthDataSource() {
     let lastRead = 0;
     let lastSynced = null;
 
-    const read = async () => {
-      if (running || Date.now() - lastRead < MIN_REREAD_MS) return;
+    const read = async (full = false) => {
+      if (running || (!full && Date.now() - lastRead < MIN_REREAD_MS)) return;
       running = true;
       setRefreshing(true);
       try {
@@ -131,7 +134,7 @@ function useHealthDataSource() {
 
         const newest = mirrored.reduce((latest, w) => (w.start > latest ? w.start : latest), '');
         let since;
-        if (newest) {
+        if (newest && !full) {
           since = new Date(newest);
           since.setDate(since.getDate() - OVERLAP_DAYS);
         } else {
@@ -188,6 +191,9 @@ function useHealthDataSource() {
       }
     };
     read();
+    // Settings can ask for the whole history again — after importing old
+    // sessions into Health, which the incremental read would never reach.
+    rereadRef.current = () => read(true);
 
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') read();
@@ -195,6 +201,7 @@ function useHealthDataSource() {
 
     return () => {
       cancelled = true;
+      rereadRef.current = null;
       subscription.remove();
     };
   }, [user, profile?.zone1Low, profile?.zone1High, firstWorkouts]);
@@ -204,7 +211,20 @@ function useHealthDataSource() {
   // while the very first Health read runs.
   const loading = !denied && series === null && (workouts === null || refreshing);
 
-  return { series, workouts: workouts ?? [], loading, refreshing, denied, capturedAt };
+  // The same session recorded twice — on a Garmin and an Apple Watch, say —
+  // shows once.
+  const unique = useMemo(() => dropOverlaps(workouts ?? []), [workouts]);
+
+  return {
+    series,
+    workouts: unique,
+    loading,
+    refreshing,
+    denied,
+    capturedAt,
+    rereadAll: () => rereadRef.current?.(),
+    canReread: healthSupported,
+  };
 }
 
 /** How old the mirrored copy is, in words. */

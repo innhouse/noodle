@@ -731,3 +731,42 @@ export function runRecords(workouts, minKm = 10) {
     halvesByYear: [...halvesByYear.entries()].sort((a, b) => b[0].localeCompare(a[0])),
   };
 }
+
+/**
+ * One session recorded by two devices — a Garmin and an Apple Watch on the
+ * same run, or an import that repeats one already in Health — appears once.
+ *
+ * Two sessions are the same when they are the same kind of activity and
+ * overlap for at least half of the shorter one. The copy kept is the one with
+ * a heart rate, then the one with a distance, then the longer.
+ */
+export function dropOverlaps(workouts) {
+  const list = [...(workouts ?? [])].sort((a, b) => a.start.localeCompare(b.start));
+  const kind = (w) => (w.type === 37 ? 'run' : w.type === 52 || w.type === 24 ? 'walk' : `t${w.type}`);
+  const score = (w) => (w.avgHr ? 4 : 0) + (w.metres ? 2 : 0) + (w.durationMin ?? 0) / 1e6;
+  const kept = [];
+  // Open sessions of each kind, to compare against the next one.
+  const open = new Map();
+  for (const w of list) {
+    const k = kind(w);
+    const prev = open.get(k);
+    const start = Date.parse(w.start);
+    const end = Date.parse(w.end ?? w.start) || start + (w.durationMin ?? 0) * 60_000;
+    if (prev) {
+      const overlap = Math.min(end, prev.end) - Math.max(start, prev.start);
+      const shorter = Math.min(end - start, prev.end - prev.start);
+      if (shorter > 0 && overlap >= shorter / 2) {
+        if (score(w) > score(prev.workout)) {
+          kept[prev.index] = w;
+          open.set(k, { workout: w, start, end: Math.max(end, prev.end), index: prev.index });
+        } else {
+          prev.end = Math.max(end, prev.end);
+        }
+        continue;
+      }
+    }
+    open.set(k, { workout: w, start, end, index: kept.length });
+    kept.push(w);
+  }
+  return kept.sort((a, b) => b.start.localeCompare(a.start));
+}
