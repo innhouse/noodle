@@ -24,7 +24,8 @@ import { colors, fonts, spacing } from './src/theme';
 
 const TABS = [
   { key: 'today', label: 'Today', icon: '☀️' },
-  { key: 'workouts', label: 'Workouts', icon: '🏃' },
+  { key: 'running', label: 'Running', icon: '🏃' },
+  { key: 'workouts', label: 'Training', icon: '🏋️' },
   { key: 'health', label: 'Health', icon: '❤️' },
   { key: 'labs', label: 'Labs', icon: '🧪' },
   { key: 'settings', label: 'Settings', icon: '⚙️' },
@@ -59,7 +60,8 @@ function Shell() {
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
         {tab === 'today' ? <TodayScreen /> : null}
-        {tab === 'workouts' ? <WorkoutsScreen /> : null}
+        {tab === 'running' ? <WorkoutsScreen key="running" mode="running" /> : null}
+        {tab === 'workouts' ? <WorkoutsScreen key="training" mode="training" /> : null}
         {tab === 'health' ? <HealthTab /> : null}
         {tab === 'labs' ? <LabsScreen /> : null}
         {tab === 'settings' ? <SettingsScreen /> : null}

@@ -20,7 +20,7 @@ import { Card } from '../ui';
  * month is marked as partial so a low number three days in doesn't read as a
  * bad month. Optional targets from Settings tick or cross each month.
  */
-function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
+function MonthlyCard({ workouts, targets, events: eventText, onMonthPress, part }) {
   const [allTime, setAllTime] = useState(false);
   const computed = useMemo(() => {
     const months = monthlyTotals(workouts, targets ?? {}, 12);
@@ -42,6 +42,7 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
 
   return (
     <Card>
+      {part !== 'training' ? (<>
       <Text style={styles.title}>Monthly totals</Text>
       <Text style={styles.body}>
         Kilometres run per month, last twelve months. Pace, heart rate and beats per km are
@@ -136,7 +137,15 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
       )}
       <SummaryRow label={`${year} to date`} cells={[Math.round(ytd.runKm), ytd.avgRunKm ?? '—', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
       <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[Math.round(average.runKm), average.avgRunKm ?? '—', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
+      </>) : null}
 
+      {part !== 'running' ? (<>
+      {part === 'training' ? (
+        <>
+          <Text style={styles.title}>Other activities</Text>
+          <Text style={styles.body}>Everything except runs, by year and by month, then each activity.</Text>
+        </>
+      ) : null}
       {years.length > 1 ? (
         <>
           <Text style={styles.section}>Other activities, by year</Text>
@@ -255,8 +264,9 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress }) {
           {onMonthPress ? <Text style={styles.tapHint}>Tap an activity to see its history year by year.</Text> : null}
         </>
       ) : null}
+      </>) : null}
 
-      {targets?.runKm > 0 ? (
+      {part !== 'training' && targets?.runKm > 0 ? (
         <Text style={styles.hint}>Ticks mark months that reached the km target in Settings → Training.</Text>
       ) : null}
     </Card>
