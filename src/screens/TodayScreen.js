@@ -18,6 +18,7 @@ import {
   formatPace,
   exerciseMinutesThisWeek,
   onDay,
+  weekKey,
 } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card, Empty, Pill } from '../ui';
@@ -138,6 +139,9 @@ export default function TodayScreen() {
         </Text>
       ) : null}
       {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} compact /> : null}
+      {workouts.length ? (
+        <WeekCard workouts={workouts} today={today} notes={notes} onPick={setNoting} />
+      ) : null}
 
       <Text style={styles.sectionHeading}>Last night</Text>
       {nightIsRecent ? (
@@ -293,7 +297,52 @@ function longDate() {
   });
 }
 
+/** This week's sessions, Monday on, one line each; tap one to note it. */
+function WeekCard({ workouts, today, notes, onPick }) {
+  const monday = weekKey(today);
+  const sessions = workouts
+    .filter((w) => w.date >= monday && w.date <= today)
+    .sort((a, b) => b.start.localeCompare(a.start));
+  if (!sessions.length) return null;
+  const minutes = sessions.reduce((sum, w) => sum + (w.durationMin ?? 0), 0);
+  const metres = sessions.reduce((sum, w) => sum + (w.metres ?? 0), 0);
+  return (
+    <Card>
+      <View style={styles.weekHeader}>
+        <Text style={styles.weekTitle}>This week</Text>
+        <Text style={styles.weekTotals}>
+          {sessions.length} session{sessions.length === 1 ? '' : 's'} · {formatDuration(minutes)}
+          {metres >= 500 ? ` · ${formatKm(metres)}` : ''}
+        </Text>
+      </View>
+      {sessions.map((w) => {
+        const { icon, label } = describeType(w.type);
+        const day = new Date(`${w.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
+        const noted = notes[w.id]?.symptoms?.length || notes[w.id]?.text;
+        return (
+          <Pressable key={w.id} style={styles.weekRow} onPress={() => onPick(w)}>
+            <Text style={styles.weekDay}>{w.date === today ? 'Today' : day}</Text>
+            <Text style={styles.weekWhat} numberOfLines={1}>
+              {icon} {label}
+              {noted ? ' ·  noted' : ''}
+            </Text>
+            <Text style={styles.weekNum}>{formatDuration(w.durationMin)}</Text>
+            <Text style={styles.weekNum}>{w.metres >= 500 ? formatKm(w.metres) : ''}</Text>
+          </Pressable>
+        );
+      })}
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
+  weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: spacing.xs },
+  weekTitle: { fontSize: fonts.big, fontWeight: '700', color: colors.ink },
+  weekTotals: { fontSize: fonts.tiny, color: colors.inkSoft },
+  weekRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderTopWidth: 1, borderTopColor: colors.line, gap: spacing.sm },
+  weekDay: { width: 44, fontSize: fonts.small, fontWeight: '700', color: colors.inkSoft },
+  weekWhat: { flex: 1, fontSize: fonts.small, color: colors.ink },
+  weekNum: { width: 62, fontSize: fonts.small, color: colors.ink, textAlign: 'right' },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   loadingText: { fontSize: fonts.small, color: colors.inkSoft, marginTop: spacing.md },
