@@ -11,6 +11,8 @@ import {
   beatsPerKm,
   describeType,
   efficiencyTrend,
+  paceByMonth,
+  formatPaceMin,
   ON_FOOT,
   formatDuration,
   formatKm,
@@ -61,6 +63,7 @@ export default function WorkoutsScreen({ mode = 'training' }) {
   // than a run, so a combined line would track the mix rather than fitness.
   const which = footType ?? (derived.hasRuns && derived.hasWalks ? 'runs' : 'all');
   const efficiency = useMemo(() => efficiencyTrend(workouts, 10, which), [workouts, which]);
+  const pace = useMemo(() => (running ? paceByMonth(workouts) : []), [workouts, running]);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -192,6 +195,29 @@ export default function WorkoutsScreen({ mode = 'training' }) {
                   : ' — more beats for the same distance; worth a look at pace, heat and sleep.'}
             </Text>
           ) : null}
+        </Card>
+      ) : null}
+
+      {running && pace.length >= 3 ? (
+        <Card>
+          <Text style={styles.effTitle}>Pace over the years</Text>
+          <Text style={styles.effBody}>
+            Average pace for each month with runs, {pace[0].month.slice(0, 4)} to now — total time over
+            total distance. Lower is faster. Tap a dot to see that month.
+          </Text>
+          <TimeChart
+            points={pace}
+            band={null}
+            outside="none"
+            format={(v) => formatPaceMin(v)}
+            labels="ends"
+            onPointPress={(point) => setMonth(point.month)}
+          />
+          <Text style={styles.effBody}>
+            Fastest month {formatPaceMin(Math.min(...pace.map((p) => p.value)))} /km · slowest{' '}
+            {formatPaceMin(Math.max(...pace.map((p) => p.value)))} /km · latest{' '}
+            {formatPaceMin(pace[pace.length - 1].value)} /km
+          </Text>
         </Card>
       ) : null}
 
