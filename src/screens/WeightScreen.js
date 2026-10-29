@@ -2,20 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
-import { dayKey, formatDayLabel } from '../lib/dates';
+import { formatDayLabel } from '../lib/dates';
 import { suddenGain, weeklyChange, weightTrend } from '../lib/weight';
 import { healthSupported, requestHealthAccess, weightSamplesSince } from '../lib/health';
-import { saveWeight, saveWeights, watchWeights } from '../lib/store';
-import { displayLb, kgToLb, lbToKg } from '../lib/units';
+import { saveWeights, watchWeights } from '../lib/store';
+import { kgToLb } from '../lib/units';
 import { TimeChart } from '../charts';
 import { colors, fonts, spacing } from '../theme';
-import { Button, Card, Empty, Field } from '../ui';
+import { Card, Empty } from '../ui';
 
 export default function WeightScreen() {
   const { user, profile, updateProfile } = useAuth();
   const [entries, setEntries] = useState([]);
-  const [input, setInput] = useState('');
-  const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [imported, setImported] = useState(null);
   const synced = useRef(false);
@@ -51,7 +49,7 @@ export default function WeightScreen() {
       await saveWeights(user.uid, fresh);
       setImported(fresh.length);
 
-      // Keep the profile in step, same as a manual log does.
+      // Keep the profile's weight in step with the newest reading.
       const newest = fresh[fresh.length - 1];
       if (!last || newest.date >= last) await updateProfile({ weightKg: newest.weightKg });
     })().catch((error) => console.warn('health weight sync failed', error));
@@ -62,46 +60,15 @@ export default function WeightScreen() {
   const latest = trended[trended.length - 1];
   const gain = useMemo(() => suddenGain(entries), [entries]);
 
-  async function log() {
-    const pounds = Number(input);
-    if (!Number.isFinite(pounds) || pounds <= 0) return;
-    const weightKg = lbToKg(pounds);
-
-    setSaving(true);
-    try {
-      await saveWeight(user.uid, dayKey(), weightKg);
-      // Keep the profile in step, or the calorie budget keeps being calculated
-      // against whatever they weighed when they first set it up.
-      await updateProfile({ weightKg });
-      setInput('');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Weight</Text>
 
-      <Card>
-        <Field
-          label="Today's weight (lb)"
-          placeholder={profile?.weightKg ? displayLb(profile.weightKg) : '180'}
-          value={input}
-          onChangeText={setInput}
-          keyboardType="decimal-pad"
-          hint="Weigh yourself at the same time each day — first thing, after the bathroom, is the most consistent."
-        />
-        <Button title="Log weight" onPress={log} loading={saving} disabled={!input.trim()} />
-
-        {healthSupported && syncHealth ? (
-          <Text style={styles.healthNote}>
-            {imported
-              ? `Added ${imported} ${imported === 1 ? 'reading' : 'readings'} from Apple Health.`
-              : 'Readings from Apple Health are added automatically. Log here only if you weighed in somewhere else.'}
-          </Text>
-        ) : null}
-      </Card>
+      <Text style={styles.healthNote}>
+        {imported
+          ? `Added ${imported} ${imported === 1 ? 'reading' : 'readings'} from Apple Health.`
+          : 'From Apple Health. Weigh in on your scale or in the Health app and it appears here.'}
+      </Text>
 
       {gain ? (
         <Card style={styles.flagCard}>
@@ -128,7 +95,7 @@ export default function WeightScreen() {
             </Text>
           ) : (
             <Text style={styles.rateHint}>
-              Log for a couple of weeks and a reliable rate of change will appear here.
+              A couple of weeks of readings and a reliable rate of change will appear here.
             </Text>
           )}
         </Card>
