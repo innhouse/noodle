@@ -31,7 +31,7 @@ export default function SettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [cleanup, setCleanup] = useState(null);
   const [leftovers, setLeftovers] = useState(false);
-  const { rereadAll, canReread, refreshing } = useHealthData();
+  const { rereadAll, canReread, refreshing, rereadResult } = useHealthData();
   const [rereadAsked, setRereadAsked] = useState(false);
 
   useEffect(() => {
@@ -305,6 +305,13 @@ export default function SettingsScreen() {
               rereadAll();
             }}
           />
+          {rereadResult && !refreshing ? (
+            <Text style={styles.eventsCheck}>
+              Done: {rereadResult.sessions.toLocaleString()} sessions read
+              {rereadResult.added ? `, ${rereadResult.added} new` : ''}. Heart rate found for{' '}
+              {rereadResult.foundHr} of the {rereadResult.lackedHr} that had none.
+            </Text>
+          ) : null}
           <Text style={[styles.cardBody, { marginTop: spacing.xs }]}>
             Noodle normally checks only for sessions newer than its latest. Use this after importing
             older workouts into Health — from Garmin or Nike through RunGap, say — so they are picked
