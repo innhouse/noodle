@@ -12,15 +12,20 @@ import {
   formatPaceMin,
 } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
-import { Button, Card } from '../ui';
+import { Card } from '../ui';
+import SheetHeader from './SheetHeader';
+import WorkoutNoteSheet from './WorkoutNoteSheet';
 
 /**
  * One month or year, in two steps: first a summary per activity (runs, walks,
  * strength, yoga…), then — on tapping an activity — its sessions, each of
  * which opens its note sheet.
  */
-export default function MonthSheet({ month, workouts, notes, onPick, onClose }) {
+export default function MonthSheet({ month, workouts, notes, onClose }) {
   const [type, setType] = useState(null);
+  // A session opened from here sits on top of this sheet, so closing it comes
+  // back to the same list rather than all the way out.
+  const [noting, setNoting] = useState(null);
   if (!month) return null;
   if (month.startsWith('activity:')) {
     return (
@@ -28,7 +33,6 @@ export default function MonthSheet({ month, workouts, notes, onPick, onClose }) 
         type={Number(month.slice('activity:'.length))}
         workouts={workouts}
         notes={notes}
-        onPick={onPick}
         onClose={onClose}
       />
     );
@@ -48,13 +52,17 @@ export default function MonthSheet({ month, workouts, notes, onPick, onClose }) 
   const chosen = type == null ? null : groups.find((g) => g.type === type);
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
+    <Modal
+      visible
+      animationType="slide"
+      onRequestClose={chosen ? () => setType(null) : onClose}
+      presentationStyle="pageSheet"
+    >
+      <View style={styles.sheet}>
+      <SheetHeader backLabel={title} onBack={chosen ? () => setType(null) : null} onDone={onClose} />
       <ScrollView contentContainerStyle={styles.container}>
         {chosen ? (
           <>
-            <Pressable onPress={() => setType(null)} hitSlop={10}>
-              <Text style={styles.back}>‹ {title}</Text>
-            </Pressable>
             <Text style={styles.title}>
               {chosen.icon} {chosen.label}
             </Text>
@@ -65,7 +73,7 @@ export default function MonthSheet({ month, workouts, notes, onPick, onClose }) 
                 key={workout.id}
                 workout={workout}
                 note={notes?.[workout.id]}
-                onPress={() => onPick(workout)}
+                onPress={() => setNoting(workout)}
               />
             ))}
           </>
@@ -91,9 +99,11 @@ export default function MonthSheet({ month, workouts, notes, onPick, onClose }) 
             {groups.length ? <Text style={styles.hint}>Tap an activity to see its sessions.</Text> : null}
           </>
         )}
-
-        <Button title="Close" variant="ghost" onPress={onClose} />
       </ScrollView>
+      </View>
+      {noting ? (
+        <WorkoutNoteSheet workout={noting} note={notes?.[noting.id]} onClose={() => setNoting(null)} />
+      ) : null}
     </Modal>
   );
 }
@@ -102,8 +112,9 @@ export default function MonthSheet({ month, workouts, notes, onPick, onClose }) 
  * One activity across the years: a row per year, newest first; tapping a year
  * lists that year's sessions.
  */
-function ActivityHistory({ type, workouts, notes, onPick, onClose }) {
+function ActivityHistory({ type, workouts, notes, onClose }) {
   const [year, setYear] = useState(null);
+  const [noting, setNoting] = useState(null);
   const { icon, label } = describeType(type);
   const sessions = (workouts ?? [])
     .filter((w) => activityGroup(w.type) === type)
@@ -120,13 +131,17 @@ function ActivityHistory({ type, workouts, notes, onPick, onClose }) {
   const chosen = year == null ? null : years.find((y) => y.key === year);
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
+    <Modal
+      visible
+      animationType="slide"
+      onRequestClose={chosen ? () => setYear(null) : onClose}
+      presentationStyle="pageSheet"
+    >
+      <View style={styles.sheet}>
+      <SheetHeader backLabel={`${label}, all years`} onBack={chosen ? () => setYear(null) : null} onDone={onClose} />
       <ScrollView contentContainerStyle={styles.container}>
         {chosen ? (
           <>
-            <Pressable onPress={() => setYear(null)} hitSlop={10}>
-              <Text style={styles.back}>‹ {label}, all years</Text>
-            </Pressable>
             <Text style={styles.title}>
               {icon} {label} · {chosen.key}
             </Text>
@@ -136,7 +151,7 @@ function ActivityHistory({ type, workouts, notes, onPick, onClose }) {
                 key={workout.id}
                 workout={workout}
                 note={notes?.[workout.id]}
-                onPress={() => onPick(workout)}
+                onPress={() => setNoting(workout)}
               />
             ))}
           </>
@@ -164,9 +179,11 @@ function ActivityHistory({ type, workouts, notes, onPick, onClose }) {
             {years.length ? <Text style={styles.hint}>Tap a year to see its sessions.</Text> : null}
           </>
         )}
-
-        <Button title="Close" variant="ghost" onPress={onClose} />
       </ScrollView>
+      </View>
+      {noting ? (
+        <WorkoutNoteSheet workout={noting} note={notes?.[noting.id]} onClose={() => setNoting(null)} />
+      ) : null}
     </Modal>
   );
 }
@@ -239,6 +256,7 @@ function SessionRow({ workout, note, onPress }) {
 }
 
 const styles = StyleSheet.create({
+  sheet: { flex: 1, backgroundColor: colors.bg },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2, backgroundColor: colors.bg, flexGrow: 1 },
   back: { fontSize: fonts.small, color: colors.primary, fontWeight: '700', marginBottom: spacing.sm },
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink },

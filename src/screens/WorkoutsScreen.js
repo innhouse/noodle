@@ -248,10 +248,6 @@ export default function WorkoutsScreen({ mode = 'training' }) {
           month={month}
           workouts={workouts}
           notes={notes}
-          onPick={(workout) => {
-            setMonth(null);
-            setNoting(workout);
-          }}
           onClose={() => setMonth(null)}
         />
       ) : null}

@@ -20,7 +20,8 @@ import {
 import { formatHours } from "../lib/useHealthData";
 import { useSleepHistory } from "../lib/useSleepHistory";
 import { colors, fonts, spacing } from "../theme";
-import { Button, Card } from "../ui";
+import { Card } from "../ui";
+import SheetHeader from "./SheetHeader";
 
 /**
  * Every night on record: twelve months as bars, then by year and by month.
@@ -52,15 +53,14 @@ export default function SleepSheet({ onClose }) {
     <Modal
       visible
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={chosen ? () => setMonth(null) : onClose}
       presentationStyle="pageSheet"
     >
+      <View style={styles.sheet}>
+      <SheetHeader backLabel="Sleep history" onBack={chosen ? () => setMonth(null) : null} onDone={onClose} />
       <ScrollView contentContainerStyle={styles.container}>
         {chosen ? (
           <>
-            <Pressable onPress={() => setMonth(null)} hitSlop={10}>
-              <Text style={styles.back}>‹ Sleep history</Text>
-            </Pressable>
             <Text style={styles.title}>{monthLabel(chosen.key, true)}</Text>
             <Text style={styles.subtitle}>{summaryLine(chosen)}</Text>
             <Card>
@@ -154,8 +154,8 @@ export default function SleepSheet({ onClose }) {
             )}
           </>
         )}
-        <Button title="Close" variant="ghost" onPress={onClose} />
       </ScrollView>
+      </View>
     </Modal>
   );
 }
@@ -235,6 +235,7 @@ function monthLabel(key, long, withYear = false) {
 }
 
 const styles = StyleSheet.create({
+  sheet: { flex: 1, backgroundColor: colors.bg },
   container: {
     padding: spacing.lg,
     paddingBottom: spacing.xl * 2,
