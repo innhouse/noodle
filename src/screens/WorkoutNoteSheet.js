@@ -7,6 +7,7 @@ import { saveWorkoutNote } from '../lib/store';
 import { describeType, formatDuration, SYMPTOMS, WORKOUT_TYPES } from '../lib/workouts';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Dropdown } from '../ui';
+import RouteMap from './RouteMap';
 
 /**
  * How a session felt, in one tap each.
@@ -67,6 +68,8 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
           {formatDuration(workout.durationMin)}
           {workout.avgHr ? ` · ${workout.avgHr} bpm avg` : ''}
         </Text>
+
+        <RouteMap workout={workout} />
 
         <Dropdown
           label="Recorded as"
