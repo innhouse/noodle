@@ -84,7 +84,8 @@ export default function ImportCard() {
     // Web only: a plain file picker. On the phone, paste instead.
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,application/json';
+    // No type filter: iOS sometimes labels a saved .json file as something
+    // else and greys it out. The contents are checked after reading.
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;
