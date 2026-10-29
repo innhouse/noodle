@@ -311,6 +311,16 @@ export function exerciseMinutesThisWeek(series, workouts) {
   return weeks[0]?.value ?? 0;
 }
 
+/**
+ * The activity a session is totalled under in the by-activity tables. Kinds
+ * that are the same training under another name share a row; each session
+ * still keeps the type it was recorded as.
+ */
+const ACTIVITY_GROUP = { 20: 50 }; // functional strength → strength training
+export function activityGroup(type) {
+  return ACTIVITY_GROUP[type] ?? type;
+}
+
 export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, walks: 0, zoneMin: 0, yogaMin: 70 };
 
 /**
@@ -636,11 +646,12 @@ export function byActivity(workouts, days = 365) {
   const totals = new Map();
   for (const w of workouts ?? []) {
     if (w.date < from) continue;
-    const t = totals.get(w.type) ?? { type: w.type, sessions: 0, minutes: 0, metres: 0 };
+    const group = activityGroup(w.type);
+    const t = totals.get(group) ?? { type: group, sessions: 0, minutes: 0, metres: 0 };
     t.sessions += 1;
     t.minutes += w.durationMin ?? 0;
     t.metres += w.metres ?? 0;
-    totals.set(w.type, t);
+    totals.set(group, t);
   }
   return [...totals.values()]
     .map((t) => ({
