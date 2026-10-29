@@ -8,7 +8,8 @@ import { colors, fonts, radius, spacing } from '../theme';
 
 const TILE = 256;
 const PAD = 18;
-const TILES = 'https://basemaps.cartocdn.com/light_all';
+// OpenStreetMap's own tiles: free, no key, attribution required.
+const TILES = 'https://tile.openstreetmap.org';
 
 /**
  * Where a session went: its GPS route over a street map, start in green and
@@ -31,7 +32,7 @@ export default function RouteMap({ workout, height = 220 }) {
       <View style={[styles.frame, { height }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {width ? <Drawing points={route.points} width={width} height={height} /> : null}
       </View>
-      <Text style={styles.credit}>© OpenStreetMap contributors © CARTO</Text>
+      <Text style={styles.credit}>© OpenStreetMap contributors</Text>
     </View>
   );
 }
@@ -110,7 +111,7 @@ function Drawing({ points, width, height }) {
       tiles.push(
         <Image
           key={`${tx}-${ty}`}
-          source={{ uri: `${TILES}/${z}/${wrapped}/${ty}@2x.png` }}
+          source={{ uri: `${TILES}/${z}/${wrapped}/${ty}.png` }}
           style={{ position: 'absolute', left: tx * TILE - originX, top: ty * TILE - originY, width: TILE, height: TILE }}
         />
       );
