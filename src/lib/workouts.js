@@ -686,15 +686,31 @@ export function runStreaks(workouts, minKm = 10, top = 5) {
   const last = streaks[streaks.length - 1];
   const current = last && today - dayNum(last.end) <= 1 ? last : null;
 
+  // Each year's best streak (a streak spanning New Year counts for the year it
+  // started) and how many qualifying days the year had.
+  const years = new Map();
+  for (const date of days) {
+    const y = date.slice(0, 4);
+    years.set(y, { year: y, qualifyingDays: (years.get(y)?.qualifyingDays ?? 0) + 1, best: null });
+  }
+  for (const s of streaks) {
+    const y = years.get(s.start.slice(0, 4));
+    if (!y.best || s.days > y.best.days) y.best = s;
+  }
+
   return {
     minKm,
     current,
+    byYear: [...years.values()].sort((a, b) => b.year.localeCompare(a.year)),
     longest: [...streaks].sort((a, b) => b.days - a.days || b.end.localeCompare(a.end)).slice(0, top),
     qualifyingDays: days.length,
   };
 }
 
 const HALF_KM = 21.0975;
+// Minutes per km outside which a "run" is a recording error, not a run.
+const MIN_RUN_PACE = 3;
+const MAX_RUN_PACE = 15;
 
 /**
  * Personal records from the runs: fastest and slowest at the streak distance,
@@ -706,7 +722,10 @@ export function runRecords(workouts, minKm = 10) {
     .filter((w) => w.type === 37 && w.metres >= minKm * 1000 && w.durationMin > 0)
     .map((w) => ({ ...w, km: w.metres / 1000, pace: w.durationMin / (w.metres / 1000) }));
   if (!runs.length) return null;
-  const byPace = [...runs].sort((a, b) => a.pace - b.pace);
+  // Fastest and slowest skip paces no run produces — a watch left recording
+  // after the finish turns 18 km into fourteen hours.
+  const plausible = runs.filter((w) => w.pace >= MIN_RUN_PACE && w.pace <= MAX_RUN_PACE);
+  const byPace = (plausible.length ? plausible : runs).sort((a, b) => a.pace - b.pace);
   const longest = [...runs].sort((a, b) => b.km - a.km)[0];
   const halves = runs.filter((w) => w.km >= HALF_KM - 0.1).sort((a, b) => b.start.localeCompare(a.start));
   const halvesByYear = new Map();
