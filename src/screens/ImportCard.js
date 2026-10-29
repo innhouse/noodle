@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
-import { saveWorkouts } from '../lib/store';
+import { saveRoute, saveWorkouts } from '../lib/store';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Card } from '../ui';
 
@@ -29,7 +29,15 @@ export default function ImportCard() {
       setResult('That file isn’t valid JSON.');
       return;
     }
-    const list = (Array.isArray(parsed) ? parsed : [parsed]).filter(valid).map(clean);
+    const entries = Array.isArray(parsed) ? parsed : [parsed];
+    // A routes file: [{ id, points: [[lat, lon], …] }, …], matched to sessions
+    // already imported.
+    const routes = entries.filter(validRoute);
+    if (routes.length) {
+      await importRoutes(routes);
+      return;
+    }
+    const list = entries.filter(valid).map(clean);
     if (!list.length) {
       setResult('No sessions found in that file.');
       return;
@@ -45,6 +53,28 @@ export default function ImportCard() {
     } catch (error) {
       console.warn('import failed', error);
       setResult('The import didn’t go through. Try again in a moment.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importRoutes(routes) {
+    setBusy(true);
+    try {
+      let done = 0;
+      // One small write each; a few at a time keeps a slow connection moving.
+      for (let i = 0; i < routes.length; i += 10) {
+        await Promise.all(
+          routes.slice(i, i + 10).map((r) => saveRoute(user.uid, r.id, r.points.map(([a, b]) => [Number(a), Number(b)])))
+        );
+        done += Math.min(10, routes.length - i);
+        setResult(`Importing routes… ${done} of ${routes.length}`);
+      }
+      setResult(`Imported ${routes.length} route${routes.length === 1 ? '' : 's'}. Open a session to see its map.`);
+      setText('');
+    } catch (error) {
+      console.warn('route import failed', error);
+      setResult('The route import didn’t finish. Importing the file again picks up where it stopped.');
     } finally {
       setBusy(false);
     }
@@ -68,7 +98,8 @@ export default function ImportCard() {
       <Text style={styles.title}>Import workouts</Text>
       <Text style={styles.body}>
         For history that isn’t in Apple Health, such as an old Garmin export converted for
-        Noodle. Importing the same file again won’t create duplicates.
+        Noodle — the sessions file first, then its routes file. Importing the same file again
+        won’t create duplicates.
       </Text>
       {Platform.OS === 'web' ? (
         <Button title="Choose file…" variant="secondary" onPress={chooseFile} loading={busy} />
@@ -86,6 +117,18 @@ export default function ImportCard() {
       <Button title="Import" onPress={() => importText(text)} loading={busy} disabled={!text.trim()} />
       {result ? <Text style={styles.result}>{result}</Text> : null}
     </Card>
+  );
+}
+
+function validRoute(r) {
+  return (
+    r &&
+    typeof r.id === 'string' &&
+    !r.id.includes('/') &&
+    Array.isArray(r.points) &&
+    r.points.length >= 2 &&
+    r.points.length <= 2000 &&
+    r.points.every((p) => Array.isArray(p) && p.length === 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])))
   );
 }
 
