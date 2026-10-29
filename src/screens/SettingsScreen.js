@@ -16,6 +16,7 @@ import {
 import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Dropdown, Field } from '../ui';
 import ImportCard from './ImportCard';
+import { parseEvents } from '../lib/workouts';
 
 const SYNC_WEIGHT_OPTIONS = [
   { value: true, label: 'Import from Apple Health automatically' },
@@ -280,9 +281,11 @@ export default function SettingsScreen() {
           value={draft.events ?? ''}
           onChangeText={(text) => set({ events: text })}
           multiline
-          placeholder={'2026-08-27 STEMI\n2018-03-01 Heart attack'}
+          placeholder="e.g. 2025-01-15 New medication"
           autoCapitalize="none"
+          autoCorrect={false}
         />
+        <EventsCheck draft={draft.events} stored={profile?.events} />
       </Card>
 
       {healthSupported ? (
@@ -361,6 +364,7 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  eventsCheck: { fontSize: fonts.tiny, color: colors.primary, fontWeight: '700', marginTop: spacing.xs },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   title: { fontSize: fonts.title, fontWeight: '800', color: colors.ink, marginBottom: spacing.lg },
 
@@ -381,3 +385,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+/** What the Events box will actually produce, and whether it is saved yet. */
+function EventsCheck({ draft, stored }) {
+  const events = parseEvents(draft);
+  const unsaved = String(draft ?? '').trim() !== String(stored ?? '').trim();
+  return (
+    <Text style={styles.eventsCheck}>
+      {events.length
+        ? `Dividers: ${events.map((e) => `${e.date} ${e.label}`).join(' · ')}`
+        : 'No events yet: nothing will be marked.'}
+      {unsaved ? '  Not saved yet: tap Save below.' : ''}
+    </Text>
+  );
+}
