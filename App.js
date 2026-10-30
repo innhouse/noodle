@@ -58,7 +58,9 @@ function Shell() {
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
+      {/* On a wide browser window the screens sit in a readable column
+          instead of stretching tables across the whole monitor. */}
+      <View style={[{ flex: 1 }, Platform.OS === 'web' && styles.webColumn]}>
         {tab === 'today' ? <TodayScreen /> : null}
         {tab === 'running' ? <WorkoutsScreen key="running" mode="running" /> : null}
         {tab === 'workouts' ? <WorkoutsScreen key="training" mode="training" /> : null}
@@ -96,6 +98,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  webColumn: { width: '100%', maxWidth: 1100, alignSelf: 'center' },
   safe: {
     flex: 1,
     backgroundColor: colors.bg,

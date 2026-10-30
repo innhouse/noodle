@@ -17,6 +17,16 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from './theme';
 
+/**
+ * Charts fill their card. On a phone that is the height they were drawn for;
+ * on a wide web window they grow taller too, so a long history isn't squashed
+ * into a strip.
+ */
+function scaledHeight(base, width) {
+  if (!width || width <= 600) return base;
+  return Math.round(Math.min(base * 2, Math.max(base, width * 0.24)));
+}
+
 const PAD_TOP = 22;
 const PAD_BOTTOM = 26;
 const PAD_LEFT = 44;
@@ -53,11 +63,12 @@ export function TimeChart({
   outside = 'both',
   format = (v) => String(v),
   labels = 'all',
-  height = 150,
+  height: baseHeight = 150,
   dateStyle = 'auto',
   onPointPress,
 }) {
   const [width, setWidth] = useState(0);
+  const height = scaledHeight(baseHeight, width);
   const sorted = [...(points ?? [])].sort((a, b) => a.date.localeCompare(b.date));
   if (!sorted.length) return null;
 
@@ -215,8 +226,9 @@ export function TimeChart({
  * @param bars    [{ label, value }] in display order
  * @param target  number or null — drawn as a dashed line
  */
-export function BarChart({ bars, target, format = (v) => String(Math.round(v)), height = 140, onBarPress }) {
+export function BarChart({ bars, target, format = (v) => String(Math.round(v)), height: baseHeight = 140, onBarPress }) {
   const [width, setWidth] = useState(0);
+  const height = scaledHeight(baseHeight, width);
   if (!bars?.length) return null;
   const plotH = height - PAD_TOP - PAD_BOTTOM;
   const max = Math.max(...bars.map((b) => b.value), target ?? 0, 1) * 1.1;
@@ -270,7 +282,7 @@ export function BarChart({ bars, target, format = (v) => String(Math.round(v)), 
 }
 
 const styles = StyleSheet.create({
-  chart: { width: '100%', maxWidth: 640, overflow: 'hidden' },
+  chart: { width: '100%', overflow: 'hidden' },
   band: { position: 'absolute', backgroundColor: colors.primarySoft },
   outBand: { position: 'absolute', backgroundColor: colors.accentSoft, opacity: 0.8 },
   guide: { position: 'absolute', height: 1, backgroundColor: colors.line, opacity: 0.7 },
