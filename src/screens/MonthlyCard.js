@@ -57,6 +57,46 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress, part 
       />
       {onMonthPress ? <Text style={styles.tapHint}>Tap a bar, a month or a year to see what was in it.</Text> : null}
 
+      <Text style={styles.section}>Running, by month</Text>
+      <View style={[styles.row, styles.head]}>
+        <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
+        <Text style={[styles.cell, styles.headText]}>Run km</Text>
+        <Text style={[styles.cell, styles.headText]}>Avg km</Text>
+        <Text style={[styles.cell, styles.headText]}>Pace</Text>
+        <Text style={[styles.cell, styles.headText]}>HR</Text>
+        <Text style={[styles.cell, styles.headText]}>B/km</Text>
+      </View>
+      {monthRows.map((entry, i) =>
+        entry.divider ? (
+          <View key={`ev${i}`} style={styles.divider}>
+            <Text style={styles.dividerText}>
+              ▲ since {entry.divider.label} · {entry.divider.date}
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            key={entry.row.month}
+            style={styles.row}
+            onPress={onMonthPress ? () => onMonthPress(entry.row.month) : undefined}
+          >
+            <Text style={[styles.cell, styles.month]}>
+              {entry.row.label}
+              {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
+            </Text>
+            <Text style={[styles.cell, tone(entry.row.met.runKm)]}>
+              {entry.row.met.runKm != null ? (entry.row.met.runKm ? '✓ ' : '') : ''}
+              {Math.round(entry.row.runKm)}
+            </Text>
+            <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
+            <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
+            <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
+            <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
+          </Pressable>
+        )
+      )}
+      <SummaryRow label={`${year} to date`} cells={[Math.round(ytd.runKm), ytd.avgRunKm ?? '—', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[Math.round(average.runKm), average.avgRunKm ?? '—', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
+
       {years.length > 1 ? (
         <>
           <Text style={styles.section}>Running, by year</Text>
@@ -97,26 +137,35 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress, part 
           )}
         </>
       ) : null}
+      </>) : null}
 
-      <Text style={styles.section}>Running, by month</Text>
+      {part !== 'running' ? (<>
+      {part === 'training' ? (
+        <>
+          <Text style={styles.title}>Other activities</Text>
+          <Text style={styles.body}>Everything except runs, by month and by year, then each activity.</Text>
+        </>
+      ) : null}
+      <Text style={styles.section}>Other activities, by month</Text>
       <View style={[styles.row, styles.head]}>
         <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
-        <Text style={[styles.cell, styles.headText]}>Run km</Text>
-        <Text style={[styles.cell, styles.headText]}>Avg km</Text>
-        <Text style={[styles.cell, styles.headText]}>Pace</Text>
-        <Text style={[styles.cell, styles.headText]}>HR</Text>
-        <Text style={[styles.cell, styles.headText]}>B/km</Text>
+        <Text style={[styles.cell, styles.headText]}>Sess.</Text>
+        <Text style={[styles.cell, styles.headText]}>Str.</Text>
+        <Text style={[styles.cell, styles.headText]}>Walk</Text>
+        <Text style={[styles.cell, styles.headText]}>Other</Text>
+        <Text style={[styles.cell, styles.headText]}>Avg min</Text>
+        <Text style={[styles.cell, styles.headText]}>Total</Text>
       </View>
       {monthRows.map((entry, i) =>
         entry.divider ? (
-          <View key={`ev${i}`} style={styles.divider}>
+          <View key={`aev${i}`} style={styles.divider}>
             <Text style={styles.dividerText}>
               ▲ since {entry.divider.label} · {entry.divider.date}
             </Text>
           </View>
         ) : (
           <Pressable
-            key={entry.row.month}
+            key={`a${entry.row.month}`}
             style={styles.row}
             onPress={onMonthPress ? () => onMonthPress(entry.row.month) : undefined}
           >
@@ -124,28 +173,18 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress, part 
               {entry.row.label}
               {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
             </Text>
-            <Text style={[styles.cell, tone(entry.row.met.runKm)]}>
-              {entry.row.met.runKm != null ? (entry.row.met.runKm ? '✓ ' : '') : ''}
-              {Math.round(entry.row.runKm)}
-            </Text>
-            <Text style={styles.cell}>{entry.row.avgRunKm ?? '—'}</Text>
-            <Text style={styles.cell}>{formatPaceMin(entry.row.pace)}</Text>
-            <Text style={styles.cell}>{entry.row.avgHr ?? '—'}</Text>
-            <Text style={styles.cell}>{entry.row.beatsPerKm ?? '—'}</Text>
+            <Text style={styles.cell}>{entry.row.otherSessions}</Text>
+            <Text style={styles.cell}>{entry.row.mix.strength}</Text>
+            <Text style={styles.cell}>{entry.row.mix.walks}</Text>
+            <Text style={styles.cell}>{entry.row.mix.other}</Text>
+            <Text style={styles.cell}>{entry.row.avgOtherMin ?? '—'}</Text>
+            <Text style={styles.cell}>{entry.row.otherMinutes}</Text>
           </Pressable>
         )
       )}
-      <SummaryRow label={`${year} to date`} cells={[Math.round(ytd.runKm), ytd.avgRunKm ?? '—', formatPaceMin(ytd.pace), ytd.avgHr ?? '—', ytd.beatsPerKm ?? '—']} />
-      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[Math.round(average.runKm), average.avgRunKm ?? '—', formatPaceMin(average.pace), average.avgHr ?? '—', average.beatsPerKm ?? '—']} />
-      </>) : null}
+      <SummaryRow label={`${year} to date`} cells={[ytd.otherSessions, '', '', '', ytd.avgOtherMin ?? '—', Math.round(ytd.otherMinutes)]} />
+      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.otherSessions, '', '', '', average.avgOtherMin ?? '—', average.otherMinutes]} />
 
-      {part !== 'running' ? (<>
-      {part === 'training' ? (
-        <>
-          <Text style={styles.title}>Other activities</Text>
-          <Text style={styles.body}>Everything except runs, by year and by month, then each activity.</Text>
-        </>
-      ) : null}
       {years.length > 1 ? (
         <>
           <Text style={styles.section}>Other activities, by year</Text>
@@ -186,45 +225,6 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress, part 
           )}
         </>
       ) : null}
-
-      <Text style={styles.section}>Other activities, by month</Text>
-      <View style={[styles.row, styles.head]}>
-        <Text style={[styles.cell, styles.month, styles.headText]}>Month</Text>
-        <Text style={[styles.cell, styles.headText]}>Sess.</Text>
-        <Text style={[styles.cell, styles.headText]}>Str.</Text>
-        <Text style={[styles.cell, styles.headText]}>Walk</Text>
-        <Text style={[styles.cell, styles.headText]}>Other</Text>
-        <Text style={[styles.cell, styles.headText]}>Avg min</Text>
-        <Text style={[styles.cell, styles.headText]}>Total</Text>
-      </View>
-      {monthRows.map((entry, i) =>
-        entry.divider ? (
-          <View key={`aev${i}`} style={styles.divider}>
-            <Text style={styles.dividerText}>
-              ▲ since {entry.divider.label} · {entry.divider.date}
-            </Text>
-          </View>
-        ) : (
-          <Pressable
-            key={`a${entry.row.month}`}
-            style={styles.row}
-            onPress={onMonthPress ? () => onMonthPress(entry.row.month) : undefined}
-          >
-            <Text style={[styles.cell, styles.month]}>
-              {entry.row.label}
-              {entry.row.current ? <Text style={styles.partial}> so far</Text> : null}
-            </Text>
-            <Text style={styles.cell}>{entry.row.otherSessions}</Text>
-            <Text style={styles.cell}>{entry.row.mix.strength}</Text>
-            <Text style={styles.cell}>{entry.row.mix.walks}</Text>
-            <Text style={styles.cell}>{entry.row.mix.other}</Text>
-            <Text style={styles.cell}>{entry.row.avgOtherMin ?? '—'}</Text>
-            <Text style={styles.cell}>{entry.row.otherMinutes}</Text>
-          </Pressable>
-        )
-      )}
-      <SummaryRow label={`${year} to date`} cells={[ytd.otherSessions, '', '', '', ytd.avgOtherMin ?? '—', Math.round(ytd.otherMinutes)]} />
-      <SummaryRow label="Monthly avg" note={`(${average.months} mo)`} cells={[average.otherSessions, '', '', '', average.avgOtherMin ?? '—', average.otherMinutes]} />
 
       {activities.length ? (
         <>
