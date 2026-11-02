@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useAuth } from '../context/AuthContext';
 import { addDays, dayKey, formatDayLabel, formatTime } from '../lib/dates';
 import { healthSupported } from '../lib/health';
-import { watchWeights, watchWorkoutNotes } from '../lib/store';
+import { watchResults, watchWeights, watchWorkoutNotes } from '../lib/store';
 import { kgToLb } from '../lib/units';
 import { describeAge, formatHours, useHealthData } from '../lib/useHealthData';
 import { suddenGain } from '../lib/weight';
@@ -42,6 +42,7 @@ export default function TodayScreen() {
   const [notes, setNotes] = useState({});
   const workouts = useMemo(() => applyNotes(recorded, notes), [recorded, notes]);
   const [weights, setWeights] = useState([]);
+  const [results, setResults] = useState([]);
   const [noting, setNoting] = useState(null);
   const [sleepOpen, setSleepOpen] = useState(false);
   const today = dayKey();
@@ -50,9 +51,11 @@ export default function TodayScreen() {
     if (!user) return undefined;
     const stopNotes = watchWorkoutNotes(user.uid, setNotes);
     const stopWeights = watchWeights(user.uid, setWeights);
+    const stopResults = watchResults(user.uid, setResults);
     return () => {
       stopNotes();
       stopWeights();
+      stopResults();
     };
   }, [user]);
 
@@ -145,7 +148,7 @@ export default function TodayScreen() {
       {workouts.length ? (
         <WeekCard workouts={workouts} today={today} notes={notes} onPick={setNoting} />
       ) : null}
-      {workouts.length ? <MilestonesCard workouts={workouts} notes={notes} /> : null}
+      {workouts.length ? <MilestonesCard workouts={workouts} notes={notes} results={results} /> : null}
 
       <Text style={styles.sectionHeading}>Last night</Text>
       {nightIsRecent ? (

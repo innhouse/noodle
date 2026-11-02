@@ -14,8 +14,14 @@ const RIDE = 13;
 // A ride this long is an event, not a commute.
 const LONG_RIDE_M = 70_000;
 
-/** Named milestones, newest first, each with its sessions and totals. */
-export function milestonesFrom(workouts) {
+/**
+ * Named milestones, newest first, each with its sessions and totals.
+ *
+ * Official results join the milestone with the same name; a result with no
+ * matching sessions — an event from before the watch — is a milestone of its
+ * own, built from the result alone.
+ */
+export function milestonesFrom(workouts, results = []) {
   const groups = new Map();
   for (const w of workouts ?? []) {
     const name = typeof w.milestone === 'string' ? w.milestone.trim() : '';
@@ -23,9 +29,53 @@ export function milestonesFrom(workouts) {
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(w);
   }
-  return [...groups.entries()]
-    .map(([name, sessions]) => summarise(name, sessions))
-    .sort((a, b) => b.start.localeCompare(a.start));
+  const byName = new Map((results ?? []).filter((r) => r?.name).map((r) => [r.name.trim(), r]));
+  const out = [...groups.entries()].map(([name, sessions]) => ({ ...summarise(name, sessions), result: byName.get(name) ?? null }));
+  for (const [name, result] of byName) {
+    if (groups.has(name) || !result.date) continue;
+    out.push({
+      name,
+      sessions: [],
+      ids: [],
+      start: result.date,
+      end: result.date,
+      minutes: result.timeSec ? result.timeSec / 60 : 0,
+      metres: result.km ? result.km * 1000 : 0,
+      type: result.type ?? 0,
+      result,
+    });
+  }
+  return out.sort((a, b) => b.start.localeCompare(a.start));
+}
+
+/** "05:45:23" from seconds. */
+export function formatClock(seconds) {
+  if (!(seconds > 0)) return null;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.round(seconds % 60);
+  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+/** Seconds from "5:45:23", "45:23" or "5h45m"; null when it doesn't read as a time. */
+export function parseClock(text) {
+  const t = String(text ?? '').trim();
+  if (!t) return null;
+  const hm = t.match(/^(\d+)\s*h\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?$/i);
+  if (hm) return Number(hm[1]) * 3600 + Number(hm[2] ?? 0) * 60 + Number(hm[3] ?? 0);
+  const parts = t.split(':').map(Number);
+  if (parts.some((n) => !Number.isFinite(n) || n < 0) || parts.length < 2 || parts.length > 3) return null;
+  const [h, m, s] = parts.length === 3 ? parts : [0, ...parts];
+  return h * 3600 + m * 60 + s;
+}
+
+/** "2,099th of 3,418" */
+export function formatPlace(place, of) {
+  if (!(place > 0)) return null;
+  const n = Number(place);
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th');
+  return `${n.toLocaleString()}${suffix}${of > 0 ? ` of ${Number(of).toLocaleString()}` : ''}`;
 }
 
 function summarise(name, sessions) {

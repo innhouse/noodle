@@ -10,6 +10,7 @@
  *   users/{uid}/health/snapshot       daily series mirrored from Apple Health
  *   users/{uid}/sleep/{YYYY-MM-DD}    one night's sleep, mirrored from Apple Health
  *   users/{uid}/routes/{workoutId}    a session's GPS route, thinned, as flat lat,lon pairs
+ *   users/{uid}/results/{id}          an official race result, typed in from the results site
  *
  * Apple Health stays the source of truth for everything mirrored here. The copies
  * exist so the web app can show the same numbers, and they are stamped with when
@@ -194,6 +195,29 @@ export function saveWorkoutNote(uid, workoutId, note) {
     workoutId,
     updatedAt: new Date().toISOString(),
   });
+}
+
+// --- Race results ----------------------------------------------------------
+
+// Official results typed in from Sportstats and the like. They stand on their
+// own, so an event from before the watch — or one Health never got — can still
+// be a milestone; one sharing a milestone's name joins it.
+export function watchResults(uid, callback) {
+  return onSnapshot(
+    collection(db, 'users', uid, 'results'),
+    (snapshot) => callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (error) => console.warn('results watch failed', error)
+  );
+}
+
+export function saveResult(uid, result) {
+  const { id, ...fields } = result;
+  const ref = id ? doc(db, 'users', uid, 'results', id) : doc(collection(db, 'users', uid, 'results'));
+  return setDoc(ref, { ...fields, updatedAt: new Date().toISOString() });
+}
+
+export function deleteResult(uid, id) {
+  return deleteDoc(doc(db, 'users', uid, 'results', id));
 }
 
 // --- Labs ------------------------------------------------------------------
