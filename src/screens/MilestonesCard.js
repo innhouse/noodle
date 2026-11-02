@@ -3,11 +3,12 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { useAuth } from '../context/AuthContext';
 import { formatDayLabel } from '../lib/dates';
-import { milestonesFrom, suggestMilestones } from '../lib/milestones';
-import { saveMilestone } from '../lib/store';
+import { formatClock, formatPlace, milestonesFrom, suggestMilestones } from '../lib/milestones';
+import { saveMilestone, saveResult } from '../lib/store';
 import { describeType, formatDuration, formatKm } from '../lib/workouts';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Card } from '../ui';
+import ResultSheet from './ResultSheet';
 import RouteMap from './RouteMap';
 import SheetHeader from './SheetHeader';
 import WorkoutNoteSheet from './WorkoutNoteSheet';
@@ -18,16 +19,17 @@ const SHOWN = 5;
  * Named milestones on Today, newest first, with Noodle's suggestions under
  * them — races and multi-day treks — to add with a tap or dismiss.
  */
-function MilestonesCard({ workouts, notes }) {
+function MilestonesCard({ workouts, notes, results }) {
   const { user, profile, updateProfile } = useAuth();
   const [open, setOpen] = useState(null);
   const [all, setAll] = useState(false);
   const [naming, setNaming] = useState(null); // { key, name }
   const [undo, setUndo] = useState(null); // the suggestion just dismissed
   const [showHidden, setShowHidden] = useState(false);
+  const [adding, setAdding] = useState(false);
   const dismissed = profile?.milestoneDismissed;
 
-  const milestones = useMemo(() => milestonesFrom(workouts), [workouts]);
+  const milestones = useMemo(() => milestonesFrom(workouts, results), [workouts, results]);
   const suggestions = useMemo(() => suggestMilestones(workouts, dismissed ?? []), [workouts, dismissed]);
   // Dismissed ones, so a stray tap on ✕ can be put right.
   const hidden = useMemo(
@@ -81,6 +83,10 @@ function MilestonesCard({ workouts, notes }) {
           <Text style={styles.more}>{all ? 'Show fewer' : `Show all ${milestones.length}`}</Text>
         </Pressable>
       ) : null}
+      <Pressable onPress={() => setAdding(true)} hitSlop={8}>
+        <Text style={styles.more}>+ Add a race result</Text>
+      </Pressable>
+      {adding ? <ResultSheet onClose={() => setAdding(false)} /> : null}
 
       {suggestions.length ? (
         <>
@@ -165,6 +171,7 @@ function MilestonesCard({ workouts, notes }) {
           }}
           onRename={async (name) => {
             await saveMilestone(user.uid, chosen.ids, name);
+            if (chosen.result) await saveResult(user.uid, { ...chosen.result, name });
             setOpen(name);
           }}
           onClose={() => setOpen(null)}
@@ -178,11 +185,13 @@ function line(m) {
   const dates =
     m.start === m.end ? formatDayLabel(m.start) : `${formatDayLabel(m.start)} – ${formatDayLabel(m.end)}`;
   const { icon } = describeType(m.type);
+  const official = formatClock(m.result?.timeSec);
   return [
     `${icon} ${dates}`,
     m.sessions.length > 1 ? `${m.sessions.length} sessions` : null,
-    formatDuration(Math.round(m.minutes)),
-    m.metres >= 500 ? formatKm(m.metres) : null,
+    official ?? formatDuration(Math.round(m.minutes)),
+    m.result?.km ? `${m.result.km} km` : m.metres >= 500 ? formatKm(m.metres) : null,
+    m.result?.category?.place ? `${formatPlace(m.result.category.place)} ${m.result.category.label ?? ''}`.trim() : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -192,13 +201,17 @@ function MilestoneSheet({ milestone, notes, onRemove, onRename, onClose }) {
   const [renaming, setRenaming] = useState(null);
   const [noting, setNoting] = useState(null);
   const [confirm, setConfirm] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const resultOnly = milestone.sessions.length === 0;
   const withRoute = milestone.sessions.find((w) => w.metres > 0 && !w.indoor) ?? milestone.sessions[0];
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <SheetHeader onDone={onClose} />
         <ScrollView contentContainerStyle={styles.sheet}>
-          {renaming != null ? (
+          {resultOnly ? (
+            <Text style={styles.sheetTitle}>★ {milestone.name}</Text>
+          ) : renaming != null ? (
             <View style={styles.naming}>
               <TextInput
                 style={styles.nameInput}
@@ -221,6 +234,19 @@ function MilestoneSheet({ milestone, notes, onRemove, onRename, onClose }) {
             </Pressable>
           )}
           <Text style={styles.sheetMeta}>{line(milestone)}</Text>
+          {milestone.result ? (
+            <ResultBlock result={milestone.result} onEdit={() => setEditing(true)} />
+          ) : (
+            <Pressable onPress={() => setEditing(true)} hitSlop={8}>
+              <Text style={styles.more}>+ Add the official result</Text>
+            </Pressable>
+          )}
+          {resultOnly ? (
+            <Text style={styles.hint}>
+              No Apple Health session for this day — it comes from the result alone. Import the ride or run into
+              Health and name it “{milestone.name}” to add the route and heart rate.
+            </Text>
+          ) : null}
           {milestone.sessions.length === 1 ? <RouteMap workout={withRoute} /> : null}
           {milestone.sessions.map((w) => {
             const { icon, label } = describeType(w.type);
@@ -242,15 +268,58 @@ function MilestoneSheet({ milestone, notes, onRemove, onRename, onClose }) {
               </Pressable>
             );
           })}
-          <Pressable onPress={() => (confirm ? onRemove() : setConfirm(true))} hitSlop={8}>
-            <Text style={styles.remove}>{confirm ? 'Tap again to remove this milestone' : 'Remove milestone'}</Text>
-          </Pressable>
+          {resultOnly ? null : (
+            <Pressable onPress={() => (confirm ? onRemove() : setConfirm(true))} hitSlop={8}>
+              <Text style={styles.remove}>{confirm ? 'Tap again to remove this milestone' : 'Remove milestone'}</Text>
+            </Pressable>
+          )}
         </ScrollView>
       </View>
       {noting ? (
         <WorkoutNoteSheet workout={noting} note={notes?.[noting.id]} onClose={() => setNoting(null)} />
       ) : null}
+      {editing ? (
+        <ResultSheet
+          result={milestone.result}
+          defaults={{
+            name: milestone.name,
+            date: milestone.start,
+            type: milestone.type,
+            km: milestone.metres >= 500 ? Math.round(milestone.metres / 100) / 10 : null,
+          }}
+          onClose={() => {
+            setEditing(false);
+            if (resultOnly) onClose();
+          }}
+        />
+      ) : null}
     </Modal>
+  );
+}
+
+/** The official finish time and placings, as the results site gave them. */
+function ResultBlock({ result, onEdit }) {
+  const rows = [
+    ['Finish time', formatClock(result.timeSec)],
+    ['Overall', formatPlace(result.overall?.place, result.overall?.of)],
+    ['Gender', formatPlace(result.gender?.place, result.gender?.of)],
+    [result.category?.label || 'Category', formatPlace(result.category?.place, result.category?.of)],
+  ].filter(([, v]) => v);
+  return (
+    <Card style={styles.result}>
+      <View style={styles.resultHead}>
+        <Text style={styles.sub}>Official result</Text>
+        <Pressable onPress={onEdit} hitSlop={8}>
+          <Text style={styles.action}>Edit</Text>
+        </Pressable>
+      </View>
+      {rows.map(([label, value]) => (
+        <View key={label} style={styles.resultRow}>
+          <Text style={styles.resultLabel}>{label}</Text>
+          <Text style={styles.resultValue}>{value}</Text>
+        </View>
+      ))}
+    </Card>
   );
 }
 
@@ -280,6 +349,11 @@ const styles = StyleSheet.create({
   renameHint: { fontSize: fonts.tiny, color: colors.primary, marginBottom: spacing.xs },
   sheetMeta: { fontSize: fonts.small, color: colors.inkSoft, marginBottom: spacing.md },
   sessionRow: { flexDirection: 'row', alignItems: 'center' },
+  result: { marginBottom: spacing.md },
+  resultHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
+  resultRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.line },
+  resultLabel: { fontSize: fonts.small, color: colors.inkSoft },
+  resultValue: { fontSize: fonts.body, fontWeight: '700', color: colors.ink },
   remove: { fontSize: fonts.small, color: colors.danger, fontWeight: '700', textAlign: 'center', marginTop: spacing.lg },
 });
 
