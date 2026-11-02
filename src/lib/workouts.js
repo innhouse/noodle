@@ -271,7 +271,8 @@ export function applyNotes(workouts, notes) {
   return (workouts ?? []).map((w) => {
     const note = notes[w.id];
     const override = note?.typeOverride;
-    const named = note?.milestone ? { ...w, milestone: note.milestone } : w;
+    let named = note?.milestone ? { ...w, milestone: note.milestone } : w;
+    if (note?.half) named = { ...named, half: true };
     return override ? { ...named, type: override, originalType: w.type } : named;
   });
 }
@@ -354,7 +355,8 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
     const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, yogaMin: 0 };
     const mobility = describeType(w.type).kind === 'mobility';
     if (mobility) week.yogaMin += w.durationMin ?? 0;
-    else week[kpiBucket(w)] += 1;
+    // A session marked "half" in its note — cut short, say — counts as half.
+    else week[kpiBucket(w)] += w.half ? 0.5 : 1;
     week.zoneMin += w.zoneMin ?? 0;
     byWeek.set(key, week);
   }
