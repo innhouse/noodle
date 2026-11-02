@@ -17,6 +17,12 @@ const MINUTES = new Set(['zoneMin', 'yogaMin']);
  * Counts sessions, not minutes, because the plan is about showing up for each
  * kind of training; the minutes chart next door covers how much.
  */
+/** Half sessions read as ½ — "1½" rather than "1.5". */
+function formatCount(n) {
+  if (n % 1 === 0) return n;
+  return `${Math.floor(n) || ''}½`;
+}
+
 function KpiCard({ workouts, kpis, history = 8, compact = false }) {
   const weeks = weeklyKpis(workouts, kpis, compact ? 1 : history);
   const current = weeks[0];
@@ -43,7 +49,7 @@ function KpiCard({ workouts, kpis, history = 8, compact = false }) {
                 numberOfLines={1}
                 adjustsFontSizeToFit
               >
-                {current.counts[k]}
+                {formatCount(current.counts[k])}
               </Text>
               <Text style={styles.cellGoal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 of {goals[k]}
@@ -76,7 +82,7 @@ function KpiCard({ workouts, kpis, history = 8, compact = false }) {
                   key={k}
                   style={[styles.historyCell, { color: week.met[k] ? colors.primary : colors.accent }]}
                 >
-                  {week.met[k] ? '✓' : '✗'} {week.counts[k]}
+                  {week.met[k] ? '✓' : '✗'} {formatCount(week.counts[k])}
                 </Text>
               ))}
             </View>

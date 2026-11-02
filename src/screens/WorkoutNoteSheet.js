@@ -23,6 +23,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
   const [text, setText] = useState('');
   const [typeOverride, setTypeOverride] = useState(null);
   const [milestone, setMilestone] = useState('');
+  const [half, setHalf] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
     setText(note?.text ?? '');
     setTypeOverride(note?.typeOverride ?? null);
     setMilestone(note?.milestone ?? '');
+    setHalf(Boolean(note?.half));
   }, [note, workout?.id]);
 
   if (!workout) return null;
@@ -56,6 +58,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
         text: text.trim(),
         typeOverride: typeOverride && typeOverride !== recordedType ? typeOverride : null,
         milestone: milestone.trim() || null,
+        half,
       });
       onClose();
     } finally {
@@ -84,6 +87,22 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
           onChange={(value) => setTypeOverride(value)}
           hint="Health keeps whatever the watch recorded; Noodle uses what you choose here."
         />
+
+        <Text style={styles.label}>Weekly plan</Text>
+        <View style={styles.chips}>
+          {[
+            ['Full session', false],
+            ['Half — cut short', true],
+          ].map(([label, value]) => (
+            <Pressable
+              key={label}
+              onPress={() => setHalf(value)}
+              style={[styles.chip, half === value && styles.chipOn]}
+            >
+              <Text style={[styles.chipText, half === value && styles.chipTextOn]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
 
         <Text style={styles.label}>How did it feel?</Text>
         <View style={styles.chips}>
