@@ -160,8 +160,8 @@ export default function SettingsScreen() {
         <Text style={styles.cardTitle}>Training</Text>
         <Text style={styles.cardBody}>
           Sessions per week you are aiming for. Runs are runs; strength is any lifting or
-          core session (Jefit included); walks are walks; other is everything else — yoga,
-          volleyball, pickleball, hikes. Set walks to 0 to leave them off the plan.
+          core session (Jefit included); walks are walks; other is everything else — cycling,
+          hikes, swims, sport. Yoga, Pilates and stretching count only towards yoga minutes. Set walks to 0 to leave them off the plan.
         </Text>
         <View style={styles.kpiRow}>
           <View style={{ flex: 1 }}>

@@ -342,7 +342,9 @@ export function kpiBucket(workout) {
  *
  * The question these answer is "did I do the mix I set out to", which minutes
  * alone cannot: a week of six runs and no lifting hits the minutes and misses
- * the plan. Walks, yoga, volleyball and the rest all count as "other".
+ * the plan. Cycling, hikes, swims, HIIT and sport count as "other". Yoga,
+ * Pilates, stretching and the rest of the mobility group count only towards
+ * yoga minutes, so a yoga session doesn't also tick off the "other" target.
  */
 export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
   const goals = { ...DEFAULT_KPIS, ...(targets ?? {}) };
@@ -350,9 +352,10 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
   for (const w of workouts ?? []) {
     const key = weekKey(w.date);
     const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, yogaMin: 0 };
-    week[kpiBucket(w)] += 1;
+    const mobility = describeType(w.type).kind === 'mobility';
+    if (mobility) week.yogaMin += w.durationMin ?? 0;
+    else week[kpiBucket(w)] += 1;
     week.zoneMin += w.zoneMin ?? 0;
-    if (describeType(w.type).kind === 'mobility') week.yogaMin += w.durationMin ?? 0;
     byWeek.set(key, week);
   }
   const now = new Date();
