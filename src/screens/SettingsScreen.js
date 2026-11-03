@@ -16,6 +16,7 @@ import {
 import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Dropdown, Field } from '../ui';
 import ImportCard from './ImportCard';
+import RemovedCard from './RemovedCard';
 import { parseEvents } from '../lib/workouts';
 
 const SYNC_WEIGHT_OPTIONS = [
@@ -31,7 +32,7 @@ export default function SettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [cleanup, setCleanup] = useState(null);
   const [leftovers, setLeftovers] = useState(false);
-  const { rereadAll, canReread, refreshing, rereadResult } = useHealthData();
+  const { rereadAll, canReread, refreshing, rereadResult, workouts } = useHealthData();
   const [rereadAsked, setRereadAsked] = useState(false);
 
   useEffect(() => {
@@ -331,6 +332,7 @@ export default function SettingsScreen() {
 
       <View style={{ height: spacing.lg }} />
       <ImportCard />
+      <RemovedCard workouts={workouts} />
 
       {leftovers || cleanup?.done ? (
       <Card style={styles.cleanupCard}>

@@ -174,6 +174,15 @@ export function watchWorkoutNotes(uid, callback) {
   );
 }
 
+/** Hide a session from Noodle (or bring it back), leaving Health and the rest of its note alone. */
+export function setWorkoutRemoved(uid, workoutId, removed) {
+  return setDoc(
+    doc(db, 'users', uid, 'workoutNotes', workoutId),
+    { workoutId, removed: Boolean(removed), updatedAt: new Date().toISOString() },
+    { merge: true }
+  );
+}
+
 /** Name (or, with null, un-name) a session as a milestone, leaving the rest of its note alone. */
 export async function saveMilestone(uid, workoutIds, name) {
   for (let i = 0; i < workoutIds.length; i += 400) {
