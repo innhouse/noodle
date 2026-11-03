@@ -268,7 +268,9 @@ export const FOOT_TYPES = [
  */
 export function applyNotes(workouts, notes) {
   if (!notes) return workouts ?? [];
-  return (workouts ?? []).map((w) => {
+  // A session removed in its sheet — a false start, a stray recording — drops
+  // out of every screen. Health keeps it; Settings can bring it back.
+  return (workouts ?? []).filter((w) => !notes[w.id]?.removed).map((w) => {
     const note = notes[w.id];
     const override = note?.typeOverride;
     let named = note?.milestone ? { ...w, milestone: note.milestone } : w;

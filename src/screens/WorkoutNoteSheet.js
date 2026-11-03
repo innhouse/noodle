@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { useAuth } from '../context/AuthContext';
 import { formatDayLabel, formatTime } from '../lib/dates';
-import { saveWorkoutNote } from '../lib/store';
+import { saveWorkoutNote, setWorkoutRemoved } from '../lib/store';
 import { describeType, formatDuration, SYMPTOMS, WORKOUT_TYPES } from '../lib/workouts';
 import { colors, fonts, radius, spacing } from '../theme';
 import { Button, Dropdown } from '../ui';
@@ -25,6 +25,7 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
   const [milestone, setMilestone] = useState('');
   const [half, setHalf] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -143,6 +144,20 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
 
         <Button title="Save" onPress={save} loading={saving} />
         <Button title="Cancel" variant="ghost" onPress={onClose} />
+        <Text
+          style={styles.removeLink}
+          onPress={async () => {
+            if (!confirmRemove) return setConfirmRemove(true);
+            await setWorkoutRemoved(user.uid, workout.id, true);
+            onClose();
+          }}
+        >
+          {confirmRemove ? 'Tap again to remove this session' : 'Remove this session'}
+        </Text>
+        <Text style={styles.removeHint}>
+          For a false start or a stray recording. It leaves Noodle's counts and charts; Apple Health keeps it.
+          Settings → Removed sessions brings it back.
+        </Text>
 
         <Text style={styles.caveat}>
           Chest discomfort, pressure or unusual breathlessness during or after exercise is
@@ -156,6 +171,8 @@ export default function WorkoutNoteSheet({ workout, note, onClose }) {
 }
 
 const styles = StyleSheet.create({
+  removeLink: { fontSize: fonts.small, color: colors.danger, fontWeight: '700', textAlign: 'center', marginTop: spacing.lg },
+  removeHint: { fontSize: fonts.tiny, color: colors.inkSoft, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.md },
   milestoneInput: { minHeight: 0, marginBottom: spacing.xs },
   milestoneHint: { fontSize: fonts.tiny, color: colors.inkSoft, marginBottom: spacing.lg },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2, backgroundColor: colors.bg, flexGrow: 1 },
