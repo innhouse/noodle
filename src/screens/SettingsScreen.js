@@ -160,14 +160,16 @@ export default function SettingsScreen() {
       <Card>
         <Text style={styles.cardTitle}>Training</Text>
         <Text style={styles.cardBody}>
-          Sessions per week you are aiming for. Runs are runs; strength is any lifting or
-          core session (Jefit included); walks are walks; other is everything else — cycling,
-          hikes, swims, sport. Yoga, Pilates and stretching count only towards yoga minutes. Set walks to 0 to leave them off the plan.
+          Sessions per week you are aiming for. Cardio is runs, rides and rows; strength is
+          any lifting or core session (Jefit included); walks are walks; other is everything
+          else — hikes, swims, sport. Yoga, Pilates and stretching count only towards yoga
+          minutes. Set walks to 0 to leave them off the plan. Kilometres, pace and streaks
+          stay running only, since a kilometre ridden is not a kilometre run.
         </Text>
         <View style={styles.kpiRow}>
           <View style={{ flex: 1 }}>
             <Field
-              label="Runs"
+              label="Cardio"
               value={String(draft.kpiRuns ?? '')}
               onChangeText={(text) => set({ kpiRuns: text })}
               keyboardType="number-pad"
