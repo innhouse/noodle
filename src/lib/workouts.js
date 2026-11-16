@@ -329,12 +329,25 @@ export function activityGroup(type) {
 export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, walks: 0, zoneMin: 0, yogaMin: 70 };
 
 /**
+ * Cardio sessions that count towards the weekly run target.
+ *
+ * An hour on the rower or the bike is the same hour of cardio training as an
+ * hour of running, so a week spent off the road should not read as a week off.
+ * Only the counting is shared: a kilometre ridden is not a kilometre run, so
+ * distance, pace, beats per kilometre, streaks and records stay runs only.
+ */
+export const RUN_LIKE = new Set([37, 13, 35]); // run, cycling, rowing
+
+/**
  * Which weekly bucket a session falls in. Walks get their own, so a daily walk
  * doesn't quietly satisfy the "other activity" target meant for sport and
  * classes.
+ *
+ * `runsOnly` narrows the run bucket back to actual runs, for the monthly tables
+ * that report kilometres and paces rather than sessions shown up for.
  */
-export function kpiBucket(workout) {
-  if (workout.type === 37) return 'runs';
+export function kpiBucket(workout, runsOnly = false) {
+  if (runsOnly ? workout.type === 37 : RUN_LIKE.has(workout.type)) return 'runs';
   if (workout.type === 52) return 'walks';
   if (describeType(workout.type).kind === 'strength') return 'strength';
   return 'other';
@@ -345,9 +358,10 @@ export function kpiBucket(workout) {
  *
  * The question these answer is "did I do the mix I set out to", which minutes
  * alone cannot: a week of six runs and no lifting hits the minutes and misses
- * the plan. Cycling, hikes, swims, HIIT and sport count as "other". Yoga,
- * Pilates, stretching and the rest of the mobility group count only towards
- * yoga minutes, so a yoga session doesn't also tick off the "other" target.
+ * the plan. Rides and rows count with the runs. Hikes, swims, HIIT and sport
+ * count as "other". Yoga, Pilates, stretching and the rest of the mobility
+ * group count only towards yoga minutes, so a yoga session doesn't also tick
+ * off the "other" target.
  */
 export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
   const goals = { ...DEFAULT_KPIS, ...(targets ?? {}) };
@@ -413,7 +427,9 @@ export function monthlyTotals(workouts, targets = {}, count = 12) {
       m.otherMinutes = (m.otherMinutes ?? 0) + (w.durationMin ?? 0);
       m.otherSessions = (m.otherSessions ?? 0) + 1;
     }
-    const bucket = kpiBucket(w);
+    // Runs only here: the columns beside this one are kilometres and paces, where
+    // a ride does not belong even though the weekly plan counts it as cardio.
+    const bucket = kpiBucket(w, true);
     m.mix = m.mix ?? { runs: 0, strength: 0, other: 0, walks: 0 };
     m.mix[bucket] += 1;
     if (w.type === 37 && w.metres) {

@@ -5,12 +5,13 @@ import { weeklyKpis } from '../lib/workouts';
 import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
-const LABELS = { runs: 'Runs', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', yogaMin: 'Yoga' };
+// 'Cardio' rather than 'Runs': the bucket counts rides and rows alongside runs.
+const LABELS = { runs: 'Cardio', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', yogaMin: 'Yoga' };
 // Targets counted in minutes rather than sessions.
 const MINUTES = new Set(['zoneMin', 'yogaMin']);
 
 /**
- * The week's mix against the plan: runs, strength sessions and other activity,
+ * The week's mix against the plan: cardio, strength sessions and other activity,
  * each as "done / target" with a tick when met, plus the recent weeks as a
  * row of ticks so a streak (or a slide) is visible without reading numbers.
  *
