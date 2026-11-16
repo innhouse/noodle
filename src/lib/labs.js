@@ -16,6 +16,18 @@ export const LAB_MARKERS = [
   { key: 'hdl', label: 'HDL cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'higher', range: { low: 0.99, high: null } },
   { key: 'triglycerides', label: 'Triglycerides', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: null, high: 2.21 } },
   { key: 'totalCholesterol', label: 'Total cholesterol', unit: 'mmol/L', decimals: 2, betterWhen: 'lower', range: { low: 2.0, high: 5.19 } },
+  // Printed on every LifeLabs lipid panel as "Chol/HDL (Risk Ratio)". It is total
+  // cholesterol over HDL, so it is worked out from those two rather than typed in,
+  // which also gives every earlier test its ratio. `<4.9` is the lab's interval.
+  {
+    key: 'cholHdlRatio',
+    label: 'Chol/HDL risk ratio',
+    unit: '',
+    decimals: 2,
+    betterWhen: 'lower',
+    range: { low: null, high: 4.9 },
+    derive: (v) => (v.totalCholesterol > 0 && v.hdl > 0 ? v.totalCholesterol / v.hdl : null),
+  },
   { key: 'apoB', label: 'ApoB', unit: 'g/L', decimals: 2, betterWhen: 'lower', range: { low: null, high: 1.2 } },
   { key: 'lpa', label: 'Lp(a)', unit: 'nmol/L', decimals: 0, betterWhen: 'lower', range: { low: null, high: 75 } },
   { key: 'hba1c', label: 'HbA1c', unit: '%', decimals: 1, betterWhen: 'lower', range: { low: 4.5, high: 5.9 } },
@@ -28,6 +40,28 @@ export const LAB_MARKERS = [
   { key: 'hemoglobin', label: 'Hemoglobin', unit: 'g/L', decimals: 0, betterWhen: null, range: { low: 135, high: 170 } },
   { key: 'alt', label: 'ALT', unit: 'U/L', decimals: 0, betterWhen: null, range: { low: null, high: 50 } },
 ];
+
+/** Markers a person types in; the rest are calculated from those. */
+export const ENTERED_MARKERS = LAB_MARKERS.filter((m) => !m.derive);
+
+/**
+ * The tests with calculated markers filled in, for display only. A value that
+ * was stored for a calculated marker is kept as it is. Never save the result:
+ * what is stored stays exactly what the lab report said.
+ */
+export function withDerived(tests) {
+  return (tests ?? []).map((test) => {
+    const values = { ...(test.values ?? {}) };
+    for (const marker of LAB_MARKERS) {
+      if (!marker.derive || values[marker.key] != null) continue;
+      const value = marker.derive(values);
+      if (value != null && Number.isFinite(value)) {
+        values[marker.key] = Number(value.toFixed(marker.decimals));
+      }
+    }
+    return { ...test, values };
+  });
+}
 
 export function markerByKey(key) {
   return LAB_MARKERS.find((m) => m.key === key);

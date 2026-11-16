@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { useAuth } from '../context/AuthContext';
 import { dayKey, formatDayLabel } from '../lib/dates';
 import {
+  ENTERED_MARKERS,
   formatLab,
   formatRange,
   historyFor,
@@ -13,6 +14,7 @@ import {
   markersWithData,
   outsideRange,
   rangeStatus,
+  withDerived,
 } from '../lib/labs';
 import { deleteLabs, saveLabs, watchLabs } from '../lib/store';
 import { TimeChart } from '../charts';
@@ -49,7 +51,9 @@ export default function LabsScreen() {
     });
   }, [user]);
 
-  const markers = useMemo(() => markersWithData(tests), [tests]);
+  // `tests` stays as stored, for editing; `shown` adds the calculated markers.
+  const shown = useMemo(() => withDerived(tests), [tests]);
+  const markers = useMemo(() => markersWithData(shown), [shown]);
 
   function startEntry(existing) {
     setDraft(
@@ -107,7 +111,7 @@ export default function LabsScreen() {
       for (const test of valid) {
         const values = Object.fromEntries(
           Object.entries(test.values)
-            .filter(([key, v]) => markerByKey(key) && Number.isFinite(Number(v)))
+            .filter(([key, v]) => markerByKey(key) && !markerByKey(key).derive && Number.isFinite(Number(v)))
             .map(([key, v]) => [key, Number(v)])
         );
         if (Object.keys(values).length) await saveLabs(user.uid, test.date, values);
@@ -155,7 +159,7 @@ export default function LabsScreen() {
             onChangeText={(date) => setDraft((d) => ({ ...d, date }))}
             placeholder={dayKey()}
           />
-          {LAB_MARKERS.map((marker) => (
+          {ENTERED_MARKERS.map((marker) => (
             <Field
               key={marker.key}
               label={`${marker.label} (${marker.unit})`}
@@ -207,14 +211,14 @@ export default function LabsScreen() {
       ) : null}
 
       {markers.map((marker) => {
-        const { latest, previous } = latestAndPrevious(tests, marker.key);
+        const { latest, previous } = latestAndPrevious(shown, marker.key);
         const value = latest.values[marker.key];
         const status = rangeStatus(value, marker.range);
         const flagged = status === 'high' || status === 'low';
         const edge = flagged ? colors.accent : status === 'in' ? colors.primary : colors.line;
         const change = previous ? value - previous.values[marker.key] : null;
         const expanded = open === marker.key;
-        const history = historyFor(tests, marker.key);
+        const history = historyFor(shown, marker.key);
         return (
           <Pressable key={marker.key} onPress={() => setOpen(expanded ? null : marker.key)}>
             <Card style={[styles.rowCard, { borderLeftWidth: 5, borderLeftColor: edge }]}>
@@ -223,7 +227,7 @@ export default function LabsScreen() {
                   <Text style={styles.rowLabel}>{marker.label}</Text>
                   <Text style={styles.rowMeta}>
                     {formatDayLabel(latest.date)}
-                    {formatRange(marker.range) ? ` · normal ${formatRange(marker.range)} ${marker.unit}` : ''}
+                    {formatRange(marker.range) ? ` · normal ${`${formatRange(marker.range)} ${marker.unit}`.trim()}` : ''}
                   </Text>
                   <View style={styles.pillRow}>
                     {status ? (
