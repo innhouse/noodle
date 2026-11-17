@@ -6,9 +6,10 @@ import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
 // 'Cardio' rather than 'Runs': the bucket counts rides and rows alongside runs.
-const LABELS = { runs: 'Cardio', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', yogaMin: 'Yoga' };
+// 'Cardio min' is time with heart rate inside the cardio band, whatever the session.
+const LABELS = { runs: 'Cardio', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', cardioMin: 'Cardio min', yogaMin: 'Yoga' };
 // Targets counted in minutes rather than sessions.
-const MINUTES = new Set(['zoneMin', 'yogaMin']);
+const MINUTES = new Set(['zoneMin', 'cardioMin', 'yogaMin']);
 
 /**
  * The week's mix against the plan: cardio, strength sessions and other activity,
@@ -28,7 +29,7 @@ function KpiCard({ workouts, kpis, history = 8, compact = false }) {
   const weeks = weeklyKpis(workouts, kpis, compact ? 1 : history);
   const current = weeks[0];
   const goals = current.goals;
-  const keys = ['runs', 'strength', 'other', 'walks', 'yogaMin', 'zoneMin'].filter((k) => goals[k] > 0);
+  const keys = ['runs', 'strength', 'other', 'walks', 'yogaMin', 'zoneMin', 'cardioMin'].filter((k) => goals[k] > 0);
   if (!keys.length) return null;
 
   return (

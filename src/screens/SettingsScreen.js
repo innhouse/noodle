@@ -17,7 +17,7 @@ import { colors, fonts, spacing } from '../theme';
 import { Button, Card, Dropdown, Field } from '../ui';
 import ImportCard from './ImportCard';
 import RemovedCard from './RemovedCard';
-import { parseEvents } from '../lib/workouts';
+import { cardioBandForAge, parseEvents } from '../lib/workouts';
 
 const SYNC_WEIGHT_OPTIONS = [
   { value: true, label: 'Import from Apple Health automatically' },
@@ -45,6 +45,7 @@ export default function SettingsScreen() {
       kpiOther: profile?.kpis?.other ?? 1,
       kpiWalks: profile?.kpis?.walks ?? 0,
       kpiZoneMin: profile?.kpis?.zoneMin ?? 0,
+      kpiCardioMin: profile?.kpis?.cardioMin ?? 0,
       kpiYogaMin: profile?.kpis?.yogaMin ?? 70,
       streakKm: profile?.streakKm ?? 10,
       monthlyMinutes: profile?.monthly?.minutes ?? 0,
@@ -68,6 +69,9 @@ export default function SettingsScreen() {
     };
   }, [user]);
 
+  // Suggested cardio band for the age typed above; null until there is one.
+  const ageBand = cardioBandForAge(draft.age);
+
   function set(patch) {
     setDraft((previous) => ({ ...previous, ...patch }));
     setSaved(false);
@@ -86,10 +90,13 @@ export default function SettingsScreen() {
         other: Number(draft.kpiOther) || 0,
         walks: Number(draft.kpiWalks) || 0,
         zoneMin: Number(draft.kpiZoneMin) || 0,
+        cardioMin: Number(draft.kpiCardioMin) || 0,
         yogaMin: Number(draft.kpiYogaMin) || 0,
       },
       zone1Low: Number(draft.zone1Low) || null,
       zone1High: Number(draft.zone1High) || null,
+      cardioLow: Number(draft.cardioLow) || null,
+      cardioHigh: Number(draft.cardioHigh) || null,
       monthly: {
         minutes: Number(draft.monthlyMinutes) || 0,
         runKm: Number(draft.monthlyRunKm) || 0,
@@ -246,6 +253,54 @@ export default function SettingsScreen() {
             />
           </View>
         </View>
+        <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
+          Cardio minutes: time in any session with your heart rate inside this band, added
+          up over the week. The old rule of thumb is 70–80% of 220 minus your age
+          {ageBand ? ` (${ageBand.low}–${ageBand.high} bpm at ${Number(draft.age)})` : ''}. That
+          rule is rough, and reads high on a beta-blocker, so use the numbers from your rehab
+          program or doctor if you have them. Leave blank to skip it.
+        </Text>
+        <View style={styles.kpiRow}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Cardio from (bpm)"
+              value={String(draft.cardioLow ?? '')}
+              onChangeText={(text) => set({ cardioLow: text })}
+              keyboardType="number-pad"
+              placeholder={String(ageBand?.low ?? 110)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="to (bpm)"
+              value={String(draft.cardioHigh ?? '')}
+              onChangeText={(text) => set({ cardioHigh: text })}
+              keyboardType="number-pad"
+              placeholder={String(ageBand?.high ?? 126)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Min / week"
+              value={String(draft.kpiCardioMin ?? '')}
+              onChangeText={(text) => set({ kpiCardioMin: text })}
+              keyboardType="number-pad"
+              placeholder="150"
+            />
+          </View>
+        </View>
+        {ageBand ? (
+          <Button
+            title={`Use 70–80% of 220 − age (${ageBand.low}–${ageBand.high})`}
+            variant="ghost"
+            onPress={() =>
+              set({
+                cardioLow: String(ageBand.low),
+                cardioHigh: String(ageBand.high),
+              })
+            }
+          />
+        ) : null}
         <Field
           label="Streak: a run counts from (km)"
           value={String(draft.streakKm ?? '')}
