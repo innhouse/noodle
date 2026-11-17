@@ -271,7 +271,7 @@ export default function SettingsScreen() {
               value={String(draft.cardioLow ?? '')}
               onChangeText={(text) => set({ cardioLow: text })}
               keyboardType="number-pad"
-              placeholder={String(ageBand?.low ?? 110)}
+              placeholder="—"
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -280,7 +280,7 @@ export default function SettingsScreen() {
               value={String(draft.cardioHigh ?? '')}
               onChangeText={(text) => set({ cardioHigh: text })}
               keyboardType="number-pad"
-              placeholder={String(ageBand?.high ?? 126)}
+              placeholder="—"
             />
           </View>
           <View style={{ flex: 1 }}>
