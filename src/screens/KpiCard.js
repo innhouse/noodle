@@ -6,9 +6,10 @@ import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
 // 'Cardio' rather than 'Runs': the bucket counts rides and rows alongside runs.
-const LABELS = { runs: 'Cardio', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', yogaMin: 'Yoga' };
+// Zone 2 is the cardio band; 'Above' is time over its top. Both count any session.
+const LABELS = { runs: 'Cardio', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', cardioMin: 'Zone 2', aboveMin: 'Above', yogaMin: 'Yoga' };
 // Targets counted in minutes rather than sessions.
-const MINUTES = new Set(['zoneMin', 'yogaMin']);
+const MINUTES = new Set(['zoneMin', 'cardioMin', 'aboveMin', 'yogaMin']);
 
 /**
  * The week's mix against the plan: cardio, strength sessions and other activity,
@@ -28,8 +29,14 @@ function KpiCard({ workouts, kpis, history = 8, compact = false }) {
   const weeks = weeklyKpis(workouts, kpis, compact ? 1 : history);
   const current = weeks[0];
   const goals = current.goals;
-  const keys = ['runs', 'strength', 'other', 'walks', 'yogaMin', 'zoneMin'].filter((k) => goals[k] > 0);
+  const keys = ['runs', 'strength', 'other', 'walks', 'yogaMin', 'zoneMin', 'cardioMin', 'aboveMin'].filter((k) => goals[k] > 0);
   if (!keys.length) return null;
+  // The three heart-rate counts, shown whether or not they carry a target.
+  const hr = current.counts;
+  const hrLine =
+    hr.zoneMin || hr.cardioMin || hr.aboveMin
+      ? `Heart-rate minutes this week: zone 1 ${hr.zoneMin} · zone 2 ${hr.cardioMin} · above ${hr.aboveMin}`
+      : null;
 
   return (
     <Card>
@@ -64,6 +71,8 @@ function KpiCard({ workouts, kpis, history = 8, compact = false }) {
           );
         })}
       </View>
+
+      {hrLine ? <Text style={styles.hrLine}>{hrLine}</Text> : null}
 
       {!compact ? (
         <View style={styles.history}>
@@ -122,6 +131,7 @@ const styles = StyleSheet.create({
   historyHead: { color: colors.inkSoft, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 },
   historyWeek: { flex: 1.4, fontSize: fonts.tiny, color: colors.inkSoft },
   historyCell: { flex: 1, fontSize: fonts.tiny, fontWeight: '700', textAlign: 'center' },
+  hrLine: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm },
   hint: { fontSize: fonts.tiny, color: colors.inkSoft, marginTop: spacing.sm, textAlign: 'right' },
 });
 

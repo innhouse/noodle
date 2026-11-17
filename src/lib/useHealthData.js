@@ -150,18 +150,24 @@ function useHealthDataSource() {
           since = daysAgo(FULL_WORKOUT_DAYS);
         }
 
+        // Zone 1 needs only its top: with no floor typed in, everything under
+        // the top counts, which is how the watch draws its lowest zone.
         const zone =
-          profile?.zone1Low != null && profile?.zone1High != null
-            ? { low: Number(profile.zone1Low), high: Number(profile.zone1High) }
+          profile?.zone1High != null
+            ? { low: Number(profile.zone1Low ?? 0), high: Number(profile.zone1High) }
             : null;
-        if (zone) {
+        const cardio =
+          profile?.cardioLow != null && profile?.cardioHigh != null
+            ? { low: Number(profile.cardioLow), high: Number(profile.cardioHigh) }
+            : null;
+        if (zone || cardio) {
           const zoneFrom = daysAgo(ZONE_DAYS);
           if (zoneFrom < since) since = zoneFrom;
         }
 
         const [data, sessions] = await Promise.all([
           healthSeries(SERIES_DAYS),
-          workoutsSince(since, { zone, known, zoneDays: ZONE_DAYS }),
+          workoutsSince(since, { zone, cardio, known, zoneDays: ZONE_DAYS }),
         ]);
         if (cancelled) return;
         freshRef.current = true;
@@ -181,7 +187,7 @@ function useHealthDataSource() {
 
         const fingerprint = JSON.stringify([
           Object.entries(data).map(([key, points]) => [key, points.length, points.at(-1)?.value]),
-          sessions.map((w) => [w.id, w.durationMin, w.avgHr, w.zoneMin]),
+          sessions.map((w) => [w.id, w.durationMin, w.avgHr, w.zoneMin, w.cardioMin, w.aboveMin]),
         ]);
         if (fingerprint === lastSynced) return;
         lastSynced = fingerprint;
@@ -195,6 +201,8 @@ function useHealthDataSource() {
           return (
             !before ||
             before.zoneMin !== w.zoneMin ||
+            before.cardioMin !== w.cardioMin ||
+            before.aboveMin !== w.aboveMin ||
             before.avgHr !== w.avgHr ||
             before.hrChecked !== w.hrChecked ||
             before.durationMin !== w.durationMin ||
@@ -230,7 +238,7 @@ function useHealthDataSource() {
       rereadRef.current = null;
       subscription.remove();
     };
-  }, [user, profile?.zone1Low, profile?.zone1High, firstWorkouts]);
+  }, [user, profile?.zone1Low, profile?.zone1High, profile?.cardioLow, profile?.cardioHigh, firstWorkouts]);
 
   // A spinner only when there is genuinely nothing to show yet: before the
   // account's copy has answered, or on a first launch with an empty account
