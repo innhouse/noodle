@@ -119,7 +119,11 @@ export default function WorkoutsScreen({ mode = 'training' }) {
         />
       ) : null}
 
-      {!running && workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} /> : null}
+      {!running && workouts.length ? <KpiCard
+          workouts={workouts}
+          kpis={profile?.kpis}
+          bands={profile}
+          /> : null}
 
       {!running && workouts.length ? (
         <Card>

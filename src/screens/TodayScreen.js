@@ -144,7 +144,11 @@ export default function TodayScreen() {
           {Math.round(thisWeek)} of {target} min this week
         </Text>
       ) : null}
-      {workouts.length ? <KpiCard workouts={workouts} kpis={profile?.kpis} compact /> : null}
+      {workouts.length ? <KpiCard
+          workouts={workouts}
+          kpis={profile?.kpis}
+          bands={profile}
+          compact /> : null}
       {workouts.length ? (
         <WeekCard workouts={workouts} today={today} notes={notes} onPick={setNoting} />
       ) : null}
