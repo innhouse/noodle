@@ -150,9 +150,11 @@ function useHealthDataSource() {
           since = daysAgo(FULL_WORKOUT_DAYS);
         }
 
+        // Zone 1 needs only its top: with no floor typed in, everything under
+        // the top counts, which is how the watch draws its lowest zone.
         const zone =
-          profile?.zone1Low != null && profile?.zone1High != null
-            ? { low: Number(profile.zone1Low), high: Number(profile.zone1High) }
+          profile?.zone1High != null
+            ? { low: Number(profile.zone1Low ?? 0), high: Number(profile.zone1High) }
             : null;
         const cardio =
           profile?.cardioLow != null && profile?.cardioHigh != null

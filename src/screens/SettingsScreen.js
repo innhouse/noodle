@@ -224,7 +224,8 @@ export default function SettingsScreen() {
         <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
           Zone 1 in beats per minute, as set on your watch or by your rehab program. Noodle
           can’t read the watch’s zones, and on a beta-blocker the usual formulas are wrong, so
-          this is typed in. Leave blank to skip zone tracking.
+          this is typed in. Leave “from” blank to count everything up to the top, as the watch
+          does; leave both blank to skip zone tracking.
         </Text>
         <View style={styles.kpiRow}>
           <View style={{ flex: 1 }}>
@@ -233,7 +234,7 @@ export default function SettingsScreen() {
               value={String(draft.zone1Low ?? '')}
               onChangeText={(text) => set({ zone1Low: text })}
               keyboardType="number-pad"
-              placeholder="95"
+              placeholder="any"
             />
           </View>
           <View style={{ flex: 1 }}>
