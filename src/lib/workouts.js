@@ -326,10 +326,10 @@ export function activityGroup(type) {
   return ACTIVITY_GROUP[type] ?? type;
 }
 
-export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, walks: 0, zoneMin: 0, cardioMin: 0, yogaMin: 70 };
+export const DEFAULT_KPIS = { runs: 3, strength: 2, other: 1, walks: 0, zoneMin: 0, cardioMin: 0, aboveMin: 0, yogaMin: 70 };
 
 /**
- * The cardio band from the old rule of thumb: 70–80% of (220 − age), in whole
+ * Zone 2, the cardio band, from the old rule of thumb: 70–80% of (220 − age), in whole
  * beats. Only ever a suggestion to fill the Settings fields with — the rule is
  * rough for anyone and reads high on a beta-blocker, so the band that counts is
  * whatever ends up typed in.
@@ -381,13 +381,14 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
   const byWeek = new Map();
   for (const w of workouts ?? []) {
     const key = weekKey(w.date);
-    const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, cardioMin: 0, yogaMin: 0 };
+    const week = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, cardioMin: 0, aboveMin: 0, yogaMin: 0 };
     const mobility = describeType(w.type).kind === 'mobility';
     if (mobility) week.yogaMin += w.durationMin ?? 0;
     // A session marked "half" in its note — cut short, say — counts as half.
     else week[kpiBucket(w)] += w.half ? 0.5 : 1;
     week.zoneMin += w.zoneMin ?? 0;
     week.cardioMin += w.cardioMin ?? 0;
+    week.aboveMin += w.aboveMin ?? 0;
     byWeek.set(key, week);
   }
   const now = new Date();
@@ -399,7 +400,7 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
     const d = new Date(monday);
     d.setDate(monday.getDate() - 7 * i);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const counts = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, cardioMin: 0, yogaMin: 0 };
+    const counts = byWeek.get(key) ?? { runs: 0, strength: 0, other: 0, walks: 0, zoneMin: 0, cardioMin: 0, aboveMin: 0, yogaMin: 0 };
     counts.yogaMin = Math.round(counts.yogaMin);
     const met = {
       runs: counts.runs >= goals.runs,
@@ -408,6 +409,7 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
       walks: counts.walks >= goals.walks,
       zoneMin: counts.zoneMin >= goals.zoneMin,
       cardioMin: counts.cardioMin >= goals.cardioMin,
+      aboveMin: counts.aboveMin >= goals.aboveMin,
       yogaMin: counts.yogaMin >= goals.yogaMin,
     };
     weeks.push({
@@ -416,7 +418,7 @@ export function weeklyKpis(workouts, targets = DEFAULT_KPIS, count = 8) {
       counts,
       goals,
       met,
-      all: ['runs', 'strength', 'other', 'walks', 'zoneMin', 'cardioMin', 'yogaMin'].every((k) => goals[k] <= 0 || met[k]),
+      all: ['runs', 'strength', 'other', 'walks', 'zoneMin', 'cardioMin', 'aboveMin', 'yogaMin'].every((k) => goals[k] <= 0 || met[k]),
     });
   }
   return weeks;

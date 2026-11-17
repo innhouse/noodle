@@ -203,6 +203,7 @@ export async function workoutsSince(since, options = {}) {
           cardio?.low != null &&
           cardio?.high != null &&
           (existing.cardioMin == null ||
+            existing.aboveMin == null ||
             existing.cardioLow !== cardio.low ||
             existing.cardioHigh !== cardio.high);
         if (!wantsZone && !wantsCardio) {
@@ -210,14 +211,17 @@ export async function workoutsSince(since, options = {}) {
           continue;
         }
         // One read of the trace serves both bands.
-        const [zoneMin, cardioMin] = await minutesInBands(workout, [
+        const [zoneMin, cardioMin, aboveMin] = await minutesInBands(workout, [
           wantsZone ? zone : null,
           wantsCardio ? cardio : null,
+          wantsCardio ? { over: cardio.high } : null,
         ]);
         results.push({
           ...existing,
           ...(wantsZone ? { zoneMin, zoneLow: zone.low, zoneHigh: zone.high } : null),
-          ...(wantsCardio ? { cardioMin, cardioLow: cardio.low, cardioHigh: cardio.high } : null),
+          ...(wantsCardio
+            ? { cardioMin, aboveMin, cardioLow: cardio.low, cardioHigh: cardio.high }
+            : null),
         });
         continue;
       }
@@ -242,17 +246,19 @@ export async function workoutsSince(since, options = {}) {
       // Minutes inside the person's own zone 1, from the session's heart-rate
       // trace. Only for recent sessions — each needs its own query — and only
       // when a zone has been set, since a guessed zone would be worse than none.
-      // The cardio band (70–80% of estimated maximum, or whatever was typed in)
-      // is counted from the same trace.
+      // Zone 2 (the cardio band) and everything above its top are counted from
+      // the same trace.
       let zoneMin = null;
       let cardioMin = null;
+      let aboveMin = null;
       if (end.getTime() > Date.now() - zoneDays * 86_400_000) {
         const hasZone = zone?.low != null && zone?.high != null;
         const hasCardio = cardio?.low != null && cardio?.high != null;
         if (hasZone || hasCardio) {
-          [zoneMin, cardioMin] = await minutesInBands(workout, [
+          [zoneMin, cardioMin, aboveMin] = await minutesInBands(workout, [
             hasZone ? zone : null,
             hasCardio ? cardio : null,
+            hasCardio ? { over: cardio.high } : null,
           ]);
         }
       }
@@ -277,6 +283,7 @@ export async function workoutsSince(since, options = {}) {
         zoneLow: zoneMin == null ? null : zone.low,
         zoneHigh: zoneMin == null ? null : zone.high,
         cardioMin,
+        aboveMin,
         cardioLow: cardioMin == null ? null : cardio.low,
         cardioHigh: cardioMin == null ? null : cardio.high,
         indoor: metadata.HKIndoorWorkout === true || metadata.HKIndoorWorkout === 1,
@@ -316,7 +323,8 @@ async function heartRateDuring(start, end) {
 
 /**
  * Minutes of a session spent with heart rate inside each [low, high] band, in
- * the order given. A missing band, or a session without a trace, gives null.
+ * the order given. A band written as { over } counts everything above that
+ * rate instead. A missing band, or a session without a trace, gives null.
  *
  * Heart-rate samples are instants, so each one stands for the time until the
  * next sample, capped at a minute so a gap in the trace is not counted as time
@@ -338,7 +346,10 @@ async function minutesInBands(workout, bands) {
     for (let i = 0; i < list.length - 1; i += 1) {
       const gap = Math.min(60_000, list[i + 1].at - list[i].at);
       bands.forEach((band, b) => {
-        if (band && list[i].bpm >= band.low && list[i].bpm <= band.high) seconds[b] += gap / 1000;
+        if (!band) return;
+        const bpm = list[i].bpm;
+        const inside = band.over != null ? bpm > band.over : bpm >= band.low && bpm <= band.high;
+        if (inside) seconds[b] += gap / 1000;
       });
     }
     return bands.map((band, b) => (band ? Math.round(seconds[b] / 60) : null));

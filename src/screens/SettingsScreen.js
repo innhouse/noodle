@@ -46,6 +46,7 @@ export default function SettingsScreen() {
       kpiWalks: profile?.kpis?.walks ?? 0,
       kpiZoneMin: profile?.kpis?.zoneMin ?? 0,
       kpiCardioMin: profile?.kpis?.cardioMin ?? 0,
+      kpiAboveMin: profile?.kpis?.aboveMin ?? 0,
       kpiYogaMin: profile?.kpis?.yogaMin ?? 70,
       streakKm: profile?.streakKm ?? 10,
       monthlyMinutes: profile?.monthly?.minutes ?? 0,
@@ -91,6 +92,7 @@ export default function SettingsScreen() {
         walks: Number(draft.kpiWalks) || 0,
         zoneMin: Number(draft.kpiZoneMin) || 0,
         cardioMin: Number(draft.kpiCardioMin) || 0,
+        aboveMin: Number(draft.kpiAboveMin) || 0,
         yogaMin: Number(draft.kpiYogaMin) || 0,
       },
       zone1Low: Number(draft.zone1Low) || null,
@@ -254,16 +256,17 @@ export default function SettingsScreen() {
           </View>
         </View>
         <Text style={[styles.cardBody, { marginTop: spacing.sm }]}>
-          Cardio minutes: time in any session with your heart rate inside this band, added
-          up over the week. The old rule of thumb is 70–80% of 220 minus your age
-          {ageBand ? ` (${ageBand.low}–${ageBand.high} bpm at ${Number(draft.age)})` : ''}. That
-          rule is rough, and reads high on a beta-blocker, so use the numbers from your rehab
-          program or doctor if you have them. Leave blank to skip it.
+          Zone 2, your cardio minutes: time in any session with your heart rate inside this
+          band, added up over the week. Time over the top of the band is counted separately
+          as “above”. Use your watch’s zone 2, or the old rule of thumb of 70–80% of 220 minus
+          your age{ageBand ? ` (${ageBand.low}–${ageBand.high} bpm at ${Number(draft.age)})` : ''}. Any
+          formula reads high on a beta-blocker, so go by numbers from your rehab program or
+          doctor if you have them. Leave blank to skip it.
         </Text>
         <View style={styles.kpiRow}>
           <View style={{ flex: 1 }}>
             <Field
-              label="Cardio from (bpm)"
+              label="Zone 2 from (bpm)"
               value={String(draft.cardioLow ?? '')}
               onChangeText={(text) => set({ cardioLow: text })}
               keyboardType="number-pad"
@@ -301,6 +304,14 @@ export default function SettingsScreen() {
             }
           />
         ) : null}
+        <Field
+          label="Above zone 2 (minutes per week)"
+          value={String(draft.kpiAboveMin ?? '')}
+          onChangeText={(text) => set({ kpiAboveMin: text })}
+          keyboardType="number-pad"
+          placeholder="0"
+          hint="Time with your heart rate over the top of zone 2. Leave at 0 to count it without a weekly target."
+        />
         <Field
           label="Streak: a run counts from (km)"
           value={String(draft.streakKm ?? '')}

@@ -185,7 +185,7 @@ function useHealthDataSource() {
 
         const fingerprint = JSON.stringify([
           Object.entries(data).map(([key, points]) => [key, points.length, points.at(-1)?.value]),
-          sessions.map((w) => [w.id, w.durationMin, w.avgHr, w.zoneMin, w.cardioMin]),
+          sessions.map((w) => [w.id, w.durationMin, w.avgHr, w.zoneMin, w.cardioMin, w.aboveMin]),
         ]);
         if (fingerprint === lastSynced) return;
         lastSynced = fingerprint;
@@ -200,6 +200,7 @@ function useHealthDataSource() {
             !before ||
             before.zoneMin !== w.zoneMin ||
             before.cardioMin !== w.cardioMin ||
+            before.aboveMin !== w.aboveMin ||
             before.avgHr !== w.avgHr ||
             before.hrChecked !== w.hrChecked ||
             before.durationMin !== w.durationMin ||
