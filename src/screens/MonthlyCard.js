@@ -38,7 +38,10 @@ function MonthlyCard({ workouts, targets, events: eventText, onMonthPress, part 
   const year = new Date().getFullYear();
   const years = computed.years;
   const events = parseEvents(eventText);
-  const monthRows = withEventDividers(months, events, (m) => `${m.month}-31`);
+  // A month is dated by its middle, so the line falls on the side of the event
+  // where most of that month lies: an event on the 27th leaves that month below
+  // the line, with the months before it; one on the 5th puts it above.
+  const monthRows = withEventDividers(months, events, (m) => `${m.month}-15`);
 
   return (
     <Card>
