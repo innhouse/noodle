@@ -56,6 +56,8 @@ function monthYear(key) {
  * @param labels    'all' | 'ends' | 'none' — which dots get a value label
  * @param height    px
  * @param onPointPress  called with the point when a dot is tapped
+ * @param markers   [{ date, label }] — a dashed upright line at each date inside the chart
+ * @param trendFrom 'YYYY-MM-DD' or null — fit the trend line only to points from this date on
  */
 export function TimeChart({
   points,
@@ -66,6 +68,8 @@ export function TimeChart({
   height: baseHeight = 150,
   dateStyle = 'auto',
   onPointPress,
+  markers = null,
+  trendFrom = null,
 }) {
   const [width, setWidth] = useState(0);
   const height = scaledHeight(baseHeight, width);
@@ -118,9 +122,10 @@ export function TimeChart({
   addGuide(Math.min(...values), false);
 
   let trend = null;
-  if (sorted.length >= 3 && plotW > 0 && t1 > t0) {
-    const xs = sorted.map((p) => xFor(p.date));
-    const ys = sorted.map((p) => yFor(p.value));
+  const fitted = trendFrom ? sorted.filter((p) => p.date >= trendFrom) : sorted;
+  if (fitted.length >= 3 && plotW > 0 && t1 > t0) {
+    const xs = fitted.map((p) => xFor(p.date));
+    const ys = fitted.map((p) => yFor(p.value));
     const n = xs.length;
     const mx = xs.reduce((a, b) => a + b, 0) / n;
     const my = ys.reduce((a, b) => a + b, 0) / n;
@@ -190,6 +195,24 @@ export function TimeChart({
             />
           ) : null}
           <View style={[styles.axis, { top: baseline, left: PAD_LEFT, width: plotW }]} />
+          {(markers ?? [])
+            .filter((m) => t1 > t0 && dayMs(m.date) > t0 && dayMs(m.date) < t1)
+            .map((m) => {
+              const x = xFor(m.date);
+              // Keep the label on the chart when the line is near the right edge.
+              const flip = x > PAD_LEFT + plotW - 110;
+              return (
+                <View key={`m${m.date}`}>
+                  <View style={[styles.marker, { left: x, top: PAD_TOP - 6, height: baseline - PAD_TOP + 6 }]} />
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.markerLabel, flip ? { left: x - 114, textAlign: 'right' } : { left: x + 4 }, { top: PAD_TOP - 10 }]}
+                  >
+                    {m.label}
+                  </Text>
+                </View>
+              );
+            })}
           {sorted.map((p) => {
             const x = xFor(p.date);
             const y = yFor(p.value);
@@ -290,6 +313,14 @@ const styles = StyleSheet.create({
   yLabel: { position: 'absolute', left: 0, textAlign: 'right', fontSize: 10, color: colors.inkSoft },
   yLabelStrong: { color: colors.primary, fontWeight: '700' },
   axis: { position: 'absolute', height: 1, backgroundColor: colors.line },
+  marker: {
+    position: 'absolute',
+    width: 0,
+    borderLeftWidth: 1.5,
+    borderLeftColor: colors.accent,
+    borderStyle: 'dashed',
+  },
+  markerLabel: { position: 'absolute', width: 110, fontSize: 10, fontWeight: '700', color: colors.accent },
   trend: { position: 'absolute', height: 2, backgroundColor: colors.inkSoft, opacity: 0.45, borderRadius: 1 },
   targetLine: { position: 'absolute', height: 0, borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.ink },
   stem: { position: 'absolute', width: 2, opacity: 0.5 },

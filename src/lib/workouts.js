@@ -9,7 +9,7 @@
  * compared only with the same person's earlier ones.
  */
 
-import { dayKey } from './dates';
+import { addDays, dayKey } from './dates';
 
 // HKWorkoutActivityType → what to call it. Anything missing falls back to 'Workout'.
 export const WORKOUT_TYPES = {
@@ -184,19 +184,51 @@ export function beatsPerKm(workout) {
  * The last `count` outdoor runs and walks with an efficiency reading, oldest
  * first, plus how the recent ones compare with the earlier ones.
  */
-export function efficiencyTrend(workouts, count = 10, which = 'all') {
+export function efficiencyTrend(workouts, count = 10, which = 'all', options = {}) {
+  // `days` picks a window of time instead of a number of sessions; with neither,
+  // everything is kept. `since` is the date of an event such as the start of a
+  // beta-blocker: beats per kilometre either side of it are not comparable, so
+  // when the window straddles it the recent-vs-earlier comparison uses only the
+  // sessions after it.
+  const { days = null, since = null } = options;
   const types = ON_FOOT[which] ?? ON_FOOT.all;
-  const sessions = (workouts ?? [])
+  let sessions = (workouts ?? [])
     .filter((w) => types.includes(w.type) && beatsPerKm(w))
-    .sort((a, b) => a.start.localeCompare(b.start))
-    .slice(-count)
-    .map((w) => ({ ...w, beatsPerKm: beatsPerKm(w) }));
-  if (sessions.length < 4) return { sessions, change: null };
-  const half = Math.floor(sessions.length / 2);
+    .sort((a, b) => a.start.localeCompare(b.start));
+  if (days != null) {
+    const from = addDays(dayKey(), -days);
+    sessions = sessions.filter((w) => w.date >= from);
+  } else if (count != null) {
+    sessions = sessions.slice(-count);
+  }
+  sessions = sessions.map((w) => ({ ...w, beatsPerKm: beatsPerKm(w) }));
+  const straddles = since != null && sessions.some((w) => w.date < since) && sessions.some((w) => w.date >= since);
+  const basis = straddles ? sessions.filter((w) => w.date >= since) : sessions;
+  if (basis.length < 4) return { sessions, change: null, since: straddles ? since : null };
+  const half = Math.floor(basis.length / 2);
   const mean = (list) => list.reduce((sum, w) => sum + w.beatsPerKm, 0) / list.length;
-  const earlier = mean(sessions.slice(0, half));
-  const recent = mean(sessions.slice(-half));
-  return { sessions, change: recent - earlier, earlier, recent };
+  const earlier = mean(basis.slice(0, half));
+  const recent = mean(basis.slice(-half));
+  return { sessions, change: recent - earlier, earlier, recent, since: straddles ? since : null };
+}
+
+/**
+ * Beats per kilometre for each month: all the beats over all the distance, so a
+ * long run weighs more than a short one. For windows too long to draw run by run.
+ */
+export function efficiencyByMonth(sessions) {
+  const months = new Map();
+  for (const w of sessions ?? []) {
+    const key = w.date.slice(0, 7);
+    const m = months.get(key) ?? { beats: 0, km: 0, sessions: 0 };
+    m.beats += w.avgHr * w.durationMin;
+    m.km += w.metres / 1000;
+    m.sessions += 1;
+    months.set(key, m);
+  }
+  return [...months.entries()]
+    .sort(([x], [y]) => x.localeCompare(y))
+    .map(([month, m]) => ({ date: `${month}-15`, month, value: Math.round(m.beats / m.km), sessions: m.sessions }));
 }
 
 /** Minutes of exercise in the current Monday-based week. */
