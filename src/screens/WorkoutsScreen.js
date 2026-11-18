@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '../context/AuthContext';
-import { formatDayLabel, formatTime } from '../lib/dates';
+import { dayKey, formatDayLabel, formatTime } from '../lib/dates';
 import { healthSupported } from '../lib/health';
 import { watchWorkoutNotes } from '../lib/store';
 import { describeAge, useHealthData } from '../lib/useHealthData';
@@ -10,6 +10,8 @@ import {
   applyNotes,
   beatsPerKm,
   describeType,
+  efficiencyByMonth,
+  parseEvents,
   efficiencyTrend,
   paceByMonth,
   formatPaceMin,
@@ -39,6 +41,15 @@ import WorkoutNoteSheet from './WorkoutNoteSheet';
  */
 const WEEKS_PAGE = 8;
 
+// How far back the beats-per-kilometre chart looks. The long windows are drawn
+// a month to a dot: hundreds of single runs would be unreadable and heavy.
+const BPK_RANGES = {
+  10: { count: 10 },
+  '3m': { days: 92 },
+  '1y': { days: 365, monthly: true },
+  all: { monthly: true },
+};
+
 export default function WorkoutsScreen({ mode = 'training' }) {
   const running = mode === 'running';
   const { user, profile } = useAuth();
@@ -48,6 +59,7 @@ export default function WorkoutsScreen({ mode = 'training' }) {
   const [noting, setNoting] = useState(null);
   const [month, setMonth] = useState(null);
   const [footType, setFootType] = useState(null);
+  const [bpkRange, setBpkRange] = useState('3m');
   // The session list is drawn a few weeks at a time. Years of history as one
   // list of cards was enough to run the phone out of memory.
   const [weeksShown, setWeeksShown] = useState(WEEKS_PAGE);
@@ -62,7 +74,27 @@ export default function WorkoutsScreen({ mode = 'training' }) {
   // Default to the split view when both exist; a walk costs fewer beats per km
   // than a run, so a combined line would track the mix rather than fitness.
   const which = footType ?? (derived.hasRuns && derived.hasWalks ? 'runs' : 'all');
-  const efficiency = useMemo(() => efficiencyTrend(workouts, 10, which), [workouts, which]);
+  // The latest event on file (a heart attack, a new medication): beats per
+  // kilometre before and after it are different measures, so the chart marks it
+  // and compares only what came after.
+  const lastEvent = useMemo(() => {
+    const past = parseEvents(profile?.events).filter((e) => e.date <= dayKey());
+    return past.length ? past[past.length - 1] : null;
+  }, [profile?.events]);
+  const range = BPK_RANGES[bpkRange];
+  const efficiency = useMemo(
+    () =>
+      efficiencyTrend(workouts, range.count ?? null, which, {
+        days: range.days ?? null,
+        since: lastEvent?.date ?? null,
+      }),
+    [workouts, which, range, lastEvent],
+  );
+  const bpkMonths = useMemo(
+    () => (range.monthly ? efficiencyByMonth(efficiency.sessions) : null),
+    [efficiency, range],
+  );
+  const bpkMarkers = lastEvent ? [{ date: lastEvent.date, label: `since ${lastEvent.label}` }] : null;
   const pace = useMemo(() => (running ? paceByMonth(workouts) : []), [workouts, running]);
 
   useEffect(() => {
@@ -171,27 +203,58 @@ export default function WorkoutsScreen({ mode = 'training' }) {
               style={styles.segmented}
             />
           ) : null}
+          <Segmented
+            options={[
+              { label: '10 runs', value: '10' },
+              { label: '3 months', value: '3m' },
+              { label: '1 year', value: '1y' },
+              { label: 'All', value: 'all' },
+            ]}
+            value={bpkRange}
+            onChange={setBpkRange}
+            style={styles.segmented}
+          />
           {efficiency.sessions.length >= 2 ? (
             <>
-              <TimeChart
-                points={efficiency.sessions.map((w) => ({ id: w.id, date: w.date, value: w.beatsPerKm }))}
-                band={null}
-                outside="none"
-                format={(v) => String(Math.round(v))}
-                onPointPress={(point) => {
-                  const session = efficiency.sessions.find((w) => w.id === point.id);
-                  if (session) setNoting(session);
-                }}
-              />
-              <Text style={styles.effHint}>Tap a dot to open that session.</Text>
+              {bpkMonths ? (
+                <TimeChart
+                  points={bpkMonths}
+                  band={null}
+                  outside="none"
+                  format={(v) => String(Math.round(v))}
+                  labels="ends"
+                  dateStyle="month"
+                  markers={bpkMarkers}
+                  trendFrom={efficiency.since}
+                  onPointPress={(point) => setMonth(point.month)}
+                />
+              ) : (
+                <TimeChart
+                  points={efficiency.sessions.map((w) => ({ id: w.id, date: w.date, value: w.beatsPerKm }))}
+                  band={null}
+                  outside="none"
+                  format={(v) => String(Math.round(v))}
+                  markers={bpkMarkers}
+                  trendFrom={efficiency.since}
+                  onPointPress={(point) => {
+                    const session = efficiency.sessions.find((w) => w.id === point.id);
+                    if (session) setNoting(session);
+                  }}
+                />
+              )}
+              <Text style={styles.effHint}>
+                {bpkMonths
+                  ? 'Each dot is a month’s average. Tap one to see that month.'
+                  : 'Tap a dot to open that session.'}
+              </Text>
             </>
           ) : (
-            <Text style={styles.effTrend}>Not enough {which === 'all' ? 'sessions' : which} yet.</Text>
+            <Text style={styles.effTrend}>Not enough {which === 'all' ? 'sessions' : which} in this period yet.</Text>
           )}
           {efficiency.change != null ? (
             <Text style={styles.effTrend}>
-              Recent average {Math.round(efficiency.recent)} vs {Math.round(efficiency.earlier)}{' '}
-              earlier
+              {efficiency.since ? `Since ${lastEvent.label}: recent` : 'Recent'} average{' '}
+              {Math.round(efficiency.recent)} vs {Math.round(efficiency.earlier)} earlier
               {Math.abs(efficiency.change) < 10
                 ? ' — about the same.'
                 : efficiency.change < 0
