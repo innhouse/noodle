@@ -149,7 +149,7 @@ export async function activeEnergyForDay(day) {
  * a choice made here.
  */
 export async function workoutsSince(since, options = {}) {
-  const { zone = null, cardio = null, zoneDays = 60, known = null } = options;
+  const { zone = null, cardio = null, zone3 = null, zoneDays = 60, known = null } = options;
   let workouts;
   try {
     workouts = await queryWorkoutSamples({
@@ -203,25 +203,30 @@ export async function workoutsSince(since, options = {}) {
           cardio?.low != null &&
           cardio?.high != null &&
           (existing.cardioMin == null ||
-            existing.aboveMin == null ||
             existing.cardioLow !== cardio.low ||
             existing.cardioHigh !== cardio.high);
-        if (!wantsZone && !wantsCardio) {
+        const wantsZone3 =
+          recent &&
+          zone3?.low != null &&
+          zone3?.high != null &&
+          (existing.zone3Min == null ||
+            existing.zone3Low !== zone3.low ||
+            existing.zone3High !== zone3.high);
+        if (!wantsZone && !wantsCardio && !wantsZone3) {
           results.push(existing);
           continue;
         }
-        // One read of the trace serves both bands.
-        const [zoneMin, cardioMin, aboveMin] = await minutesInBands(workout, [
+        // One read of the trace serves all three bands.
+        const [zoneMin, cardioMin, zone3Min] = await minutesInBands(workout, [
           wantsZone ? zone : null,
           wantsCardio ? cardio : null,
-          wantsCardio ? { over: cardio.high } : null,
+          wantsZone3 ? zone3 : null,
         ]);
         results.push({
           ...existing,
           ...(wantsZone ? { zoneMin, zoneLow: zone.low, zoneHigh: zone.high } : null),
-          ...(wantsCardio
-            ? { cardioMin, aboveMin, cardioLow: cardio.low, cardioHigh: cardio.high }
-            : null),
+          ...(wantsCardio ? { cardioMin, cardioLow: cardio.low, cardioHigh: cardio.high } : null),
+          ...(wantsZone3 ? { zone3Min, zone3Low: zone3.low, zone3High: zone3.high } : null),
         });
         continue;
       }
@@ -246,19 +251,19 @@ export async function workoutsSince(since, options = {}) {
       // Minutes inside the person's own zone 1, from the session's heart-rate
       // trace. Only for recent sessions — each needs its own query — and only
       // when a zone has been set, since a guessed zone would be worse than none.
-      // Zone 2 (the cardio band) and everything above its top are counted from
-      // the same trace.
+      // Zone 2 (the cardio band) and zone 3 are counted from the same trace.
       let zoneMin = null;
       let cardioMin = null;
-      let aboveMin = null;
+      let zone3Min = null;
       if (end.getTime() > Date.now() - zoneDays * 86_400_000) {
         const hasZone = zone?.low != null && zone?.high != null;
         const hasCardio = cardio?.low != null && cardio?.high != null;
-        if (hasZone || hasCardio) {
-          [zoneMin, cardioMin, aboveMin] = await minutesInBands(workout, [
+        const hasZone3 = zone3?.low != null && zone3?.high != null;
+        if (hasZone || hasCardio || hasZone3) {
+          [zoneMin, cardioMin, zone3Min] = await minutesInBands(workout, [
             hasZone ? zone : null,
             hasCardio ? cardio : null,
-            hasCardio ? { over: cardio.high } : null,
+            hasZone3 ? zone3 : null,
           ]);
         }
       }
@@ -283,7 +288,9 @@ export async function workoutsSince(since, options = {}) {
         zoneLow: zoneMin == null ? null : zone.low,
         zoneHigh: zoneMin == null ? null : zone.high,
         cardioMin,
-        aboveMin,
+        zone3Min,
+        zone3Low: zone3Min == null ? null : zone3.low,
+        zone3High: zone3Min == null ? null : zone3.high,
         cardioLow: cardioMin == null ? null : cardio.low,
         cardioHigh: cardioMin == null ? null : cardio.high,
         indoor: metadata.HKIndoorWorkout === true || metadata.HKIndoorWorkout === 1,
@@ -323,8 +330,9 @@ async function heartRateDuring(start, end) {
 
 /**
  * Minutes of a session spent with heart rate inside each [low, high] band, in
- * the order given. A band written as { over } counts everything above that
- * rate instead. A missing band, or a session without a trace, gives null.
+ * the order given. A band runs from its low up to, but not including, one beat
+ * past its high, so a reading of 127.5 lands in 117–127 and neighbouring bands
+ * leave no gap. A missing band, or a session without a trace, gives null.
  *
  * Heart-rate samples are instants, so each one stands for the time until the
  * next sample, capped at a minute so a gap in the trace is not counted as time
@@ -348,7 +356,7 @@ async function minutesInBands(workout, bands) {
       bands.forEach((band, b) => {
         if (!band) return;
         const bpm = list[i].bpm;
-        const inside = band.over != null ? bpm > band.over : bpm >= band.low && bpm <= band.high;
+        const inside = bpm >= band.low && bpm < band.high + 1;
         if (inside) seconds[b] += gap / 1000;
       });
     }

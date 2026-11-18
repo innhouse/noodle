@@ -160,14 +160,22 @@ function useHealthDataSource() {
           profile?.cardioLow != null && profile?.cardioHigh != null
             ? { low: Number(profile.cardioLow), high: Number(profile.cardioHigh) }
             : null;
-        if (zone || cardio) {
+        // Zone 3 starts where zone 2 stops unless its own floor is typed in.
+        const zone3 =
+          profile?.zone3High != null
+            ? {
+                low: Number(profile.zone3Low ?? (cardio ? cardio.high + 1 : 0)),
+                high: Number(profile.zone3High),
+              }
+            : null;
+        if (zone || cardio || zone3) {
           const zoneFrom = daysAgo(ZONE_DAYS);
           if (zoneFrom < since) since = zoneFrom;
         }
 
         const [data, sessions] = await Promise.all([
           healthSeries(SERIES_DAYS),
-          workoutsSince(since, { zone, cardio, known, zoneDays: ZONE_DAYS }),
+          workoutsSince(since, { zone, cardio, zone3, known, zoneDays: ZONE_DAYS }),
         ]);
         if (cancelled) return;
         freshRef.current = true;
@@ -187,7 +195,7 @@ function useHealthDataSource() {
 
         const fingerprint = JSON.stringify([
           Object.entries(data).map(([key, points]) => [key, points.length, points.at(-1)?.value]),
-          sessions.map((w) => [w.id, w.durationMin, w.avgHr, w.zoneMin, w.cardioMin, w.aboveMin]),
+          sessions.map((w) => [w.id, w.durationMin, w.avgHr, w.zoneMin, w.cardioMin, w.zone3Min]),
         ]);
         if (fingerprint === lastSynced) return;
         lastSynced = fingerprint;
@@ -202,7 +210,7 @@ function useHealthDataSource() {
             !before ||
             before.zoneMin !== w.zoneMin ||
             before.cardioMin !== w.cardioMin ||
-            before.aboveMin !== w.aboveMin ||
+            before.zone3Min !== w.zone3Min ||
             before.avgHr !== w.avgHr ||
             before.hrChecked !== w.hrChecked ||
             before.durationMin !== w.durationMin ||
@@ -238,7 +246,7 @@ function useHealthDataSource() {
       rereadRef.current = null;
       subscription.remove();
     };
-  }, [user, profile?.zone1Low, profile?.zone1High, profile?.cardioLow, profile?.cardioHigh, firstWorkouts]);
+  }, [user, profile?.zone1Low, profile?.zone1High, profile?.cardioLow, profile?.cardioHigh, profile?.zone3Low, profile?.zone3High, firstWorkouts]);
 
   // A spinner only when there is genuinely nothing to show yet: before the
   // account's copy has answered, or on a first launch with an empty account

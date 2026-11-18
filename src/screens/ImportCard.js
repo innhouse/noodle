@@ -169,7 +169,7 @@ function clean(w) {
     hrr: null,
     zoneMin: null,
     cardioMin: null,
-    aboveMin: null,
+    zone3Min: null,
     indoor: Boolean(w.indoor),
     source: typeof w.source === 'string' ? w.source.slice(0, 40) : 'Imported',
     imported: true,
