@@ -59,7 +59,7 @@ export default function WorkoutsScreen({ mode = 'training' }) {
   const [noting, setNoting] = useState(null);
   const [month, setMonth] = useState(null);
   const [footType, setFootType] = useState(null);
-  const [bpkRange, setBpkRange] = useState('3m');
+  const [bpkRange, setBpkRange] = useState('1y');
   // The session list is drawn a few weeks at a time. Years of history as one
   // list of cards was enough to run the phone out of memory.
   const [weeksShown, setWeeksShown] = useState(WEEKS_PAGE);
