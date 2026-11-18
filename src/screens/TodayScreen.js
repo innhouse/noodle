@@ -242,14 +242,14 @@ function WorkoutCard({ workout, note, onPress }) {
             {workout.source ? ` · ${workout.source}` : ''}
           </Text>
           <Text style={styles.workoutDetails}>{details.join(' · ')}</Text>
-          {bpk || workout.hrr || workout.zoneMin != null || workout.cardioMin != null || workout.aboveMin != null ? (
+          {bpk || workout.hrr || workout.zoneMin != null || workout.cardioMin != null || workout.zone3Min != null ? (
             <Text style={styles.workoutExtra}>
               {[
                 bpk ? `${bpk} beats/km` : null,
                 workout.hrr ? `recovery −${workout.hrr} bpm` : null,
                 workout.zoneMin != null ? `${workout.zoneMin} min in zone 1` : null,
                 workout.cardioMin != null ? `${workout.cardioMin} min in zone 2` : null,
-                workout.aboveMin ? `${workout.aboveMin} min above` : null,
+                workout.zone3Min ? `${workout.zone3Min} min in zone 3` : null,
               ]
                 .filter(Boolean)
                 .join(' · ')}

@@ -7,10 +7,10 @@ import { colors, fonts, spacing } from '../theme';
 import { Card } from '../ui';
 
 // 'Cardio' rather than 'Runs': the bucket counts rides and rows alongside runs.
-// Zone 2 is the cardio band; 'Above' is time over its top. Both count any session.
-const LABELS = { runs: 'Cardio', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', cardioMin: 'Zone 2', aboveMin: 'Above', yogaMin: 'Yoga' };
+// Zone 2 is the cardio band and zone 3 the one over it. All three count any session.
+const LABELS = { runs: 'Cardio', strength: 'Strength', other: 'Other', walks: 'Walks', zoneMin: 'Zone 1', cardioMin: 'Zone 2', zone3Min: 'Zone 3', yogaMin: 'Yoga' };
 // Targets counted in minutes rather than sessions.
-const MINUTES = new Set(['zoneMin', 'cardioMin', 'aboveMin', 'yogaMin']);
+const MINUTES = new Set(['zoneMin', 'cardioMin', 'zone3Min', 'yogaMin']);
 
 /**
  * The week's mix against the plan: cardio, strength sessions and other activity,
@@ -29,7 +29,7 @@ function formatCount(n) {
 // The plan (sessions and yoga) and the heart-rate zones are two cards: eight
 // boxes on one line squeezed every number on a phone until none could be read.
 const PLAN_KEYS = ['runs', 'strength', 'other', 'walks', 'yogaMin'];
-const ZONE_KEYS = ['zoneMin', 'cardioMin', 'aboveMin'];
+const ZONE_KEYS = ['zoneMin', 'cardioMin', 'zone3Min'];
 
 /** One box: label on top, the number large, the target and a bar beneath. */
 function Cell({ label, sub, value, goal, minutes, met, onPress, selected }) {
@@ -144,7 +144,7 @@ function ZoneSessions({ workouts, zoneKey, week, label, onClose }) {
   );
 }
 
-/** "80–116 bpm", "117–127 bpm", "128+ bpm" — what each zone box is counting. */
+/** "80–116 bpm", "117–127 bpm", "128–139 bpm" — what each zone box is counting. */
 function zoneRanges(bands) {
   const num = (v) => (v == null || v === '' ? null : Number(v));
   const low1 = num(bands?.zone1Low) ?? 0;
@@ -152,10 +152,12 @@ function zoneRanges(bands) {
   const low2 = num(bands?.cardioLow);
   const high2 = num(bands?.cardioHigh);
   const zone2 = low2 != null && high2 != null;
+  const high3 = num(bands?.zone3High);
+  const low3 = num(bands?.zone3Low) ?? (high2 != null ? high2 + 1 : null);
   return {
     zoneMin: high1 != null ? (low1 > 0 ? `${low1}–${high1} bpm` : `up to ${high1} bpm`) : null,
     cardioMin: zone2 ? `${low2}–${high2} bpm` : null,
-    aboveMin: zone2 ? `${high2 + 1}+ bpm` : null,
+    zone3Min: high3 != null && low3 != null ? `${low3}–${high3} bpm` : null,
   };
 }
 
